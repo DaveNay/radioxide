@@ -88,29 +88,152 @@ pub mod tcp {
 
 #[cfg(target_os = "linux")]
 pub mod dbus {
+    use super::*;
+    use radioxide_proto::{Agc, Band, Mode, RadioCommand, RadioStatus};
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::Arc;
     use zbus::dbus_interface;
-    use zbus::Connection;
+    use zbus::fdo;
+    use zbus::ConnectionBuilder;
 
-    pub struct RadioxideDBus;
+    type Handler = Arc<
+        dyn Fn(RadioxideMessage) -> Pin<Box<dyn Future<Output = RadioxideResponse> + Send>>
+            + Send
+            + Sync,
+    >;
 
-    #[dbus_interface(name = "com.radioxide.Daemon")]
+    pub struct RadioxideDBus {
+        handler: Handler,
+    }
+
     impl RadioxideDBus {
-        pub fn send_command(&self, cmd: String) -> zbus::fdo::Result<String> {
-            println!("DBus command received: {}", cmd);
-            Ok(format!("Executed {}", cmd))
+        fn msg(command: RadioCommand) -> RadioxideMessage {
+            RadioxideMessage { command }
+        }
+
+        /// Extract status from a successful response, or return a D-Bus error.
+        fn require_status(resp: &RadioxideResponse) -> fdo::Result<&RadioStatus> {
+            resp.status
+                .as_ref()
+                .ok_or_else(|| fdo::Error::Failed(resp.message.clone()))
         }
     }
 
-    pub async fn start_dbus_service() -> zbus::Result<()> {
-        let connection = Connection::session().await?;
-        let daemon = RadioxideDBus;
-        connection
-            .object_server()
-            .at("/com/radioxide/Daemon", daemon)
-            .await?;
-        println!("DBus service running...");
-        loop {
-            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+    #[dbus_interface(name = "com.radioxide.Daemon")]
+    impl RadioxideDBus {
+        async fn set_frequency(&self, hz: u64) -> fdo::Result<bool> {
+            let resp = (self.handler)(Self::msg(RadioCommand::SetFrequency(hz))).await;
+            Ok(resp.success)
         }
+
+        async fn get_frequency(&self) -> fdo::Result<u64> {
+            let resp = (self.handler)(Self::msg(RadioCommand::GetFrequency)).await;
+            Self::require_status(&resp).map(|s| s.frequency_hz)
+        }
+
+        async fn set_band(&self, band: String) -> fdo::Result<bool> {
+            let band: Band = band
+                .parse()
+                .map_err(|e: String| fdo::Error::InvalidArgs(e))?;
+            let resp = (self.handler)(Self::msg(RadioCommand::SetBand(band))).await;
+            Ok(resp.success)
+        }
+
+        async fn get_band(&self) -> fdo::Result<String> {
+            let resp = (self.handler)(Self::msg(RadioCommand::GetBand)).await;
+            Self::require_status(&resp).map(|s| s.band.to_string())
+        }
+
+        async fn set_mode(&self, mode: String) -> fdo::Result<bool> {
+            let mode: Mode = mode
+                .parse()
+                .map_err(|e: String| fdo::Error::InvalidArgs(e))?;
+            let resp = (self.handler)(Self::msg(RadioCommand::SetMode(mode))).await;
+            Ok(resp.success)
+        }
+
+        async fn get_mode(&self) -> fdo::Result<String> {
+            let resp = (self.handler)(Self::msg(RadioCommand::GetMode)).await;
+            Self::require_status(&resp).map(|s| s.mode.to_string())
+        }
+
+        async fn tune(&self) -> fdo::Result<bool> {
+            let resp = (self.handler)(Self::msg(RadioCommand::Tune)).await;
+            Ok(resp.success)
+        }
+
+        async fn ptt_on(&self) -> fdo::Result<bool> {
+            let resp = (self.handler)(Self::msg(RadioCommand::PttOn)).await;
+            Ok(resp.success)
+        }
+
+        async fn ptt_off(&self) -> fdo::Result<bool> {
+            let resp = (self.handler)(Self::msg(RadioCommand::PttOff)).await;
+            Ok(resp.success)
+        }
+
+        async fn set_power(&self, percent: u8) -> fdo::Result<bool> {
+            let resp = (self.handler)(Self::msg(RadioCommand::SetPower(percent))).await;
+            Ok(resp.success)
+        }
+
+        async fn get_power(&self) -> fdo::Result<u8> {
+            let resp = (self.handler)(Self::msg(RadioCommand::GetPower)).await;
+            Self::require_status(&resp).map(|s| s.power)
+        }
+
+        async fn set_volume(&self, percent: u8) -> fdo::Result<bool> {
+            let resp = (self.handler)(Self::msg(RadioCommand::SetVolume(percent))).await;
+            Ok(resp.success)
+        }
+
+        async fn get_volume(&self) -> fdo::Result<u8> {
+            let resp = (self.handler)(Self::msg(RadioCommand::GetVolume)).await;
+            Self::require_status(&resp).map(|s| s.volume)
+        }
+
+        async fn set_agc(&self, agc: String) -> fdo::Result<bool> {
+            let agc: Agc = agc
+                .parse()
+                .map_err(|e: String| fdo::Error::InvalidArgs(e))?;
+            let resp = (self.handler)(Self::msg(RadioCommand::SetAgc(agc))).await;
+            Ok(resp.success)
+        }
+
+        async fn get_agc(&self) -> fdo::Result<String> {
+            let resp = (self.handler)(Self::msg(RadioCommand::GetAgc)).await;
+            Self::require_status(&resp).map(|s| s.agc.to_string())
+        }
+
+        async fn get_status(&self) -> fdo::Result<String> {
+            let resp = (self.handler)(Self::msg(RadioCommand::GetStatus)).await;
+            let status = Self::require_status(&resp)?;
+            serde_json::to_string(status)
+                .map_err(|e| fdo::Error::Failed(format!("serialization error: {e}")))
+        }
+    }
+
+    /// Start a D-Bus service that dispatches radio commands via the given handler.
+    /// Mirrors the TCP `start_server` pattern with the same handler signature.
+    pub async fn start_dbus_service<F, Fut>(handler: F) -> zbus::Result<()>
+    where
+        F: Fn(RadioxideMessage) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = RadioxideResponse> + Send + 'static,
+    {
+        let handler: Handler = Arc::new(move |msg| Box::pin(handler(msg)));
+        let daemon = RadioxideDBus { handler };
+
+        let _connection = ConnectionBuilder::session()?
+            .name("com.radioxide.Daemon")?
+            .serve_at("/com/radioxide/Daemon", daemon)?
+            .build()
+            .await?;
+
+        println!("D-Bus service running on session bus (com.radioxide.Daemon)");
+
+        // Keep the service alive indefinitely.
+        std::future::pending::<()>().await;
+        Ok(())
     }
 }

@@ -117,13 +117,41 @@ async fn main() {
 
     println!("Radioxide daemon starting...");
 
-    let handler = move |msg: RadioxideMessage| {
-        let radio = radio.clone();
+    let tcp_radio = radio.clone();
+    let tcp_handler = move |msg: RadioxideMessage| {
+        let radio = tcp_radio.clone();
         async move { dispatch(radio, msg).await }
     };
 
-    if let Err(e) = tcp::start_server(&config.addr, handler).await {
-        eprintln!("Daemon error: {e}");
+    #[cfg(target_os = "linux")]
+    {
+        use radioxide_transports::dbus;
+
+        let dbus_radio = radio.clone();
+        let dbus_handler = move |msg: RadioxideMessage| {
+            let radio = dbus_radio.clone();
+            async move { dispatch(radio, msg).await }
+        };
+
+        tokio::select! {
+            result = tcp::start_server(&config.addr, tcp_handler) => {
+                if let Err(e) = result {
+                    eprintln!("TCP server error: {e}");
+                }
+            }
+            result = dbus::start_dbus_service(dbus_handler) => {
+                if let Err(e) = result {
+                    eprintln!("D-Bus service error: {e}");
+                }
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        if let Err(e) = tcp::start_server(&config.addr, tcp_handler).await {
+            eprintln!("TCP server error: {e}");
+        }
     }
 }
 
