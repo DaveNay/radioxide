@@ -65,8 +65,12 @@ All three binaries depend on both `radioxide-proto` and `radioxide-transports`. 
 - `CatPort` (daemon::radio::yaesu::serial): async serial port wrapper for CAT commands
 - `RadioxideDBus` (transports::dbus): D-Bus interface struct at path `/com/radioxide/Daemon`
 
+## Cross-Platform Requirements
+
+All three executables (daemon, CLI, GUI) must compile and run on **Windows, macOS, and Linux**. Platform-specific code must be behind `cfg` attributes or feature flags — never a hard dependency that prevents compilation on other platforms.
+
 ## Platform-Specific Notes
 
-- **D-Bus transport** (`zbus` crate) is Linux-specific
-- **Flatpak** packaging: app ID `com.radioxide.GUI`, FreeDesktop Platform 22.08
+- **D-Bus transport** (`zbus` crate) is Linux-only — must be gated behind `#[cfg(target_os = "linux")]`
+- **Flatpak** packaging: app ID `com.radioxide.GUI`, FreeDesktop Platform 22.08 (Linux only)
 - **Windows** packaging: NSIS installer (`installer.nsi`), installs to Program Files with desktop shortcut

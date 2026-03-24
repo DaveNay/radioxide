@@ -1,8 +1,6 @@
 use radioxide_proto::{RadioxideMessage, RadioxideResponse};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use zbus::dbus_interface;
-use zbus::Connection;
 
 /// Read a length-prefixed frame: 4-byte big-endian length, then that many bytes of JSON.
 async fn read_frame(stream: &mut TcpStream) -> tokio::io::Result<Option<Vec<u8>>> {
@@ -88,8 +86,11 @@ pub mod tcp {
     }
 }
 
+#[cfg(target_os = "linux")]
 pub mod dbus {
-    use super::*;
+    use zbus::dbus_interface;
+    use zbus::Connection;
+
     pub struct RadioxideDBus;
 
     #[dbus_interface(name = "com.radioxide.Daemon")]

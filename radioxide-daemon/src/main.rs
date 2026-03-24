@@ -25,7 +25,7 @@ struct Config {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct RadioConfig {
-    /// Serial port path (e.g., "/dev/ttyUSB0" or "COM3").
+    /// Serial port path (e.g., "/dev/ttyUSB0" on Linux, "/dev/cu.usbserial-XXX" on macOS, "COM3" on Windows).
     serial: String,
 
     /// Baud rate for the serial port.
