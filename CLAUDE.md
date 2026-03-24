@@ -31,26 +31,31 @@ cargo clippy --workspace
 
 ## Architecture
 
-Radioxide is a cross-platform radio application with a daemon/client architecture. Five crates in a Cargo workspace:
+Radioxide is a cross-platform ham radio remote control application (hamlib replacement) with a daemon/client architecture. The daemon communicates directly with radio hardware — no hamlib or similar libraries. Five crates in a Cargo workspace:
 
 ```
-radioxide-proto          (lib)  Core protocol types: RadioxideCommand enum, RadioxideMessage struct
-    ↓                           Serialized as JSON via serde
+radioxide-proto          (lib)  Core protocol types: RadioCommand enum, RadioxideMessage struct,
+    ↓                           Band/Mode/Agc enums, RadioStatus. Serialized as JSON via serde
 radioxide-transports     (lib)  Two transport backends:
     │                           - tcp module: async TCP server/client (tokio)
     │                           - dbus module: D-Bus interface via zbus (com.radioxide.Daemon)
     ↓
-radioxide-daemon         (bin)  Background service (stub)
+radioxide-daemon         (bin)  Background service with in-memory radio state
 radioxide-cli            (bin)  CLI client using clap v4 derive
-radioxide-gui            (bin)  GUI client using iced v0.13.0
+radioxide-gui            (bin)  Reference GUI client using iced v0.13.0 (freq, band, mode, AGC, power, volume, PTT, tune)
 ```
 
 All three binaries depend on both `radioxide-proto` and `radioxide-transports`. The proto crate is the foundation — change message types there and all crates see the update.
 
 ## Key Types
 
-- `RadioxideCommand` (proto): enum with `Play`, `Pause`, `Stop`, `SetVolume(u8)`
-- `RadioxideMessage` (proto): struct with `command: RadioxideCommand` and `payload: Option<String>`
+- `RadioCommand` (proto): enum — `SetFrequency(u64)`, `SetBand(Band)`, `SetMode(Mode)`, `Tune`, `PttOn`/`PttOff`, `SetPower(u8)`, `SetVolume(u8)`, `SetAgc(Agc)`, and corresponding `Get*` variants plus `GetStatus`
+- `Band` (proto): enum — `Band160m` through `Band70cm` (13 HF/VHF/UHF bands)
+- `Mode` (proto): enum — `LSB`, `USB`, `CW`, `AM`, `FM`, `Digital`, `CWR`, `DigitalR`
+- `Agc` (proto): enum — `Off`, `Fast`, `Medium`, `Slow`
+- `RadioStatus` (proto): full radio state snapshot (frequency, band, mode, power, volume, AGC, PTT, tuning)
+- `RadioxideMessage` (proto): envelope with `command: RadioCommand`
+- `RadioxideResponse` (proto): `success`, `message`, optional `status: RadioStatus`
 - `RadioxideDBus` (transports::dbus): D-Bus interface struct at path `/com/radioxide/Daemon`
 
 ## Platform-Specific Notes

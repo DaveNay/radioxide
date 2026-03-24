@@ -49,6 +49,7 @@ pub mod tcp {
                             let resp = RadioxideResponse {
                                 success: false,
                                 message: format!("Invalid message: {e}"),
+                                status: None,
                             };
                             let data = serde_json::to_vec(&resp).unwrap();
                             let _ = write_frame(&mut socket, &data).await;
