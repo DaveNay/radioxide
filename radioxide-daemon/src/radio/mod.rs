@@ -22,7 +22,6 @@ pub enum BackendError {
     #[error("invalid parameter: {0}")]
     InvalidParameter(String),
 
-    #[allow(dead_code)]
     #[error("radio not connected")]
     NotConnected,
 }

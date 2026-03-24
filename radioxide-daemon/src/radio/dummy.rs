@@ -1,17 +1,19 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use radioxide_proto::{Agc, Band, Mode, RadioStatus};
 use tokio::sync::Mutex;
 
-use super::{Radio, Result};
+use super::{BackendError, Radio, Result};
 
 pub struct DummyRadio {
-    state: Mutex<RadioStatus>,
+    state: Arc<Mutex<RadioStatus>>,
 }
 
 impl DummyRadio {
     pub fn new() -> Self {
         Self {
-            state: Mutex::new(RadioStatus::default()),
+            state: Arc::new(Mutex::new(RadioStatus::default())),
         }
     }
 }
@@ -19,6 +21,11 @@ impl DummyRadio {
 #[async_trait]
 impl Radio for DummyRadio {
     async fn set_frequency(&self, hz: u64) -> Result<()> {
+        if !(30_000..=60_000_000).contains(&hz) {
+            return Err(BackendError::InvalidParameter(format!(
+                "frequency {hz} Hz out of range (30000-60000000)"
+            )));
+        }
         self.state.lock().await.frequency_hz = hz;
         Ok(())
     }
@@ -49,6 +56,12 @@ impl Radio for DummyRadio {
 
     async fn tune(&self) -> Result<()> {
         self.state.lock().await.tuning = true;
+        // Simulate tuner completing after 2 seconds.
+        let state = self.state.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            state.lock().await.tuning = false;
+        });
         Ok(())
     }
 

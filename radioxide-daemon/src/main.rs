@@ -6,6 +6,7 @@ use std::sync::Arc;
 use radioxide_proto::{RadioCommand, RadioxideMessage, RadioxideResponse, DEFAULT_ADDR};
 use radioxide_transports::tcp;
 use serde::{Deserialize, Serialize};
+use tracing::{error, info};
 
 use radio::dummy::DummyRadio;
 use radio::yaesu::ft450d::Ft450d;
@@ -61,8 +62,8 @@ fn load_config() -> Config {
     let path = config_path();
 
     if !path.exists() {
-        println!("No config file found at {}", path.display());
-        println!("Using defaults. Create {} to configure.", path.display());
+        info!("No config file found at {}", path.display());
+        info!("Using defaults. Create {} to configure.", path.display());
 
         // Create the config directory and write a default config
         if let Some(parent) = path.parent() {
@@ -70,7 +71,7 @@ fn load_config() -> Config {
                 let default = Config::default();
                 if let Ok(json) = serde_json::to_string_pretty(&default) {
                     let _ = std::fs::write(&path, json);
-                    println!("Wrote default config to {}", path.display());
+                    info!("Wrote default config to {}", path.display());
                 }
             }
         }
@@ -81,16 +82,16 @@ fn load_config() -> Config {
     match std::fs::read_to_string(&path) {
         Ok(contents) => match serde_json::from_str(&contents) {
             Ok(config) => {
-                println!("Loaded config from {}", path.display());
+                info!("Loaded config from {}", path.display());
                 config
             }
             Err(e) => {
-                eprintln!("Error parsing {}: {e}", path.display());
+                error!("Error parsing {}: {e}", path.display());
                 std::process::exit(1);
             }
         },
         Err(e) => {
-            eprintln!("Error reading {}: {e}", path.display());
+            error!("Error reading {}: {e}", path.display());
             std::process::exit(1);
         }
     }
@@ -98,29 +99,38 @@ fn load_config() -> Config {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::init();
+
     let config = load_config();
 
     let radio: Arc<dyn Radio> = if let Some(ref rc) = config.radio {
-        println!("Opening serial port {} at {} baud...", rc.serial, rc.baud);
+        info!("Opening serial port {} at {} baud...", rc.serial, rc.baud);
         let serial_config = SerialConfig::new(rc.serial.clone(), rc.baud);
         match Ft450d::new(serial_config) {
             Ok(r) => Arc::new(r),
             Err(e) => {
-                eprintln!("Failed to open radio: {e}");
+                error!("Failed to open radio: {e}");
                 std::process::exit(1);
             }
         }
     } else {
-        println!("No radio configured, using dummy backend");
+        info!("No radio configured, using dummy backend");
         Arc::new(DummyRadio::new())
     };
 
-    println!("Radioxide daemon starting...");
+    info!("Radioxide daemon starting...");
 
     let tcp_radio = radio.clone();
     let tcp_handler = move |msg: RadioxideMessage| {
         let radio = tcp_radio.clone();
         async move { dispatch(radio, msg).await }
+    };
+
+    let shutdown = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install signal handler");
+        info!("Shutdown signal received, stopping...");
     };
 
     #[cfg(target_os = "linux")]
@@ -136,27 +146,51 @@ async fn main() {
         tokio::select! {
             result = tcp::start_server(&config.addr, tcp_handler) => {
                 if let Err(e) = result {
-                    eprintln!("TCP server error: {e}");
+                    error!("TCP server error: {e}");
                 }
             }
             result = dbus::start_dbus_service(dbus_handler) => {
                 if let Err(e) = result {
-                    eprintln!("D-Bus service error: {e}");
+                    error!("D-Bus service error: {e}");
                 }
             }
+            _ = shutdown => {}
         }
     }
 
     #[cfg(not(target_os = "linux"))]
     {
-        if let Err(e) = tcp::start_server(&config.addr, tcp_handler).await {
-            eprintln!("TCP server error: {e}");
+        tokio::select! {
+            result = tcp::start_server(&config.addr, tcp_handler) => {
+                if let Err(e) = result {
+                    error!("TCP server error: {e}");
+                }
+            }
+            _ = shutdown => {}
         }
     }
+
+    info!("Radioxide daemon stopped.");
 }
 
 async fn dispatch(radio: Arc<dyn Radio>, msg: RadioxideMessage) -> RadioxideResponse {
-    println!("Received: {:?}", msg.command);
+    info!("Received: {:?}", msg.command);
+
+    // GetStatus is handled separately to avoid a redundant second get_status() call.
+    if matches!(msg.command, RadioCommand::GetStatus) {
+        return match radio.get_status().await {
+            Ok(status) => RadioxideResponse {
+                success: true,
+                message: "Radio status".into(),
+                status: Some(status),
+            },
+            Err(e) => RadioxideResponse {
+                success: false,
+                message: format!("Error: {e}"),
+                status: None,
+            },
+        };
+    }
 
     let result: Result<String, radio::BackendError> = match msg.command {
         RadioCommand::SetFrequency(hz) => radio.set_frequency(hz).await.map(|_| "Frequency set".into()),
@@ -174,7 +208,7 @@ async fn dispatch(radio: Arc<dyn Radio>, msg: RadioxideMessage) -> RadioxideResp
         RadioCommand::GetVolume => radio.get_volume().await.map(|v| format!("Volume: {v}%")),
         RadioCommand::SetAgc(agc) => radio.set_agc(agc).await.map(|_| format!("AGC set to {agc}")),
         RadioCommand::GetAgc => radio.get_agc().await.map(|a| format!("AGC: {a}")),
-        RadioCommand::GetStatus => radio.get_status().await.map(|_| "Radio status".into()),
+        RadioCommand::GetStatus => unreachable!(),
     };
 
     match result {

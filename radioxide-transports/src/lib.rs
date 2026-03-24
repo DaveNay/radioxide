@@ -1,6 +1,7 @@
 use radioxide_proto::{RadioxideMessage, RadioxideResponse};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tracing::{error, info, warn};
 
 /// Read a length-prefixed frame: 4-byte big-endian length, then that many bytes of JSON.
 async fn read_frame(stream: &mut TcpStream) -> tokio::io::Result<Option<Vec<u8>>> {
@@ -35,34 +36,46 @@ pub mod tcp {
     {
         let handler = std::sync::Arc::new(handler);
         let listener = TcpListener::bind(addr).await?;
-        println!("Listening on {addr}");
+        info!("Listening on {addr}");
         loop {
             let (mut socket, peer) = listener.accept().await?;
             let handler = handler.clone();
             tokio::spawn(async move {
-                println!("Client connected: {peer}");
+                info!("Client connected: {peer}");
                 while let Ok(Some(frame)) = read_frame(&mut socket).await {
                     let msg: RadioxideMessage = match serde_json::from_slice(&frame) {
                         Ok(m) => m,
                         Err(e) => {
-                            eprintln!("Bad message from {peer}: {e}");
+                            warn!("Bad message from {peer}: {e}");
                             let resp = RadioxideResponse {
                                 success: false,
                                 message: format!("Invalid message: {e}"),
                                 status: None,
                             };
-                            let data = serde_json::to_vec(&resp).unwrap();
+                            let data = match serde_json::to_vec(&resp) {
+                                Ok(d) => d,
+                                Err(e) => {
+                                    error!("Failed to serialize error response for {peer}: {e}");
+                                    break;
+                                }
+                            };
                             let _ = write_frame(&mut socket, &data).await;
                             continue;
                         }
                     };
                     let resp = handler(msg).await;
-                    let data = serde_json::to_vec(&resp).unwrap();
+                    let data = match serde_json::to_vec(&resp) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            error!("Failed to serialize response for {peer}: {e}");
+                            break;
+                        }
+                    };
                     if write_frame(&mut socket, &data).await.is_err() {
                         break;
                     }
                 }
-                println!("Client disconnected: {peer}");
+                info!("Client disconnected: {peer}");
             });
         }
     }
@@ -230,7 +243,7 @@ pub mod dbus {
             .build()
             .await?;
 
-        println!("D-Bus service running on session bus (com.radioxide.Daemon)");
+        info!("D-Bus service running on session bus (com.radioxide.Daemon)");
 
         // Keep the service alive indefinitely.
         std::future::pending::<()>().await;

@@ -17,7 +17,8 @@ struct Cli {
 enum Command {
     /// Set VFO frequency in Hz (e.g., 14074000)
     Freq {
-        /// Frequency in Hz
+        /// Frequency in Hz (30000–60000000)
+        #[arg(value_parser = clap::value_parser!(u64).range(30_000..=60_000_000))]
         hz: u64,
     },
     /// Get current VFO frequency
@@ -44,14 +45,16 @@ enum Command {
     PttOff,
     /// Set RF power output (0-100%)
     Power {
-        /// Power percentage
+        /// Power percentage (0–100)
+        #[arg(value_parser = clap::value_parser!(u8).range(0..=100))]
         pct: u8,
     },
     /// Get current RF power level
     GetPower,
     /// Set AF volume (0-100%)
     Volume {
-        /// Volume percentage
+        /// Volume percentage (0–100)
+        #[arg(value_parser = clap::value_parser!(u8).range(0..=100))]
         pct: u8,
     },
     /// Get current AF volume
