@@ -1,113 +1,101 @@
-use std::sync::{Arc, Mutex};
+mod radio;
 
-use radioxide_proto::{
-    Band, RadioCommand, RadioStatus, RadioxideMessage, RadioxideResponse, DEFAULT_ADDR,
-};
+use std::sync::Arc;
+
+use clap::Parser;
+use radioxide_proto::{RadioCommand, RadioxideMessage, RadioxideResponse, DEFAULT_ADDR};
 use radioxide_transports::tcp;
 
-/// Shared radio state — will eventually be backed by real hardware.
-struct RadioState {
-    status: RadioStatus,
-}
+use radio::dummy::DummyRadio;
+use radio::yaesu::ft450d::Ft450d;
+use radio::yaesu::serial::SerialConfig;
+use radio::Radio;
 
-impl RadioState {
-    fn new() -> Self {
-        Self {
-            status: RadioStatus::default(),
-        }
-    }
+#[derive(Parser)]
+#[command(name = "radioxide-daemon", about = "Radioxide radio control daemon")]
+struct Args {
+    /// Serial port for the radio (e.g., /dev/ttyUSB0). If omitted, uses a dummy backend.
+    #[arg(long)]
+    serial: Option<String>,
 
-    fn handle(&mut self, cmd: RadioCommand) -> RadioxideResponse {
-        match cmd {
-            RadioCommand::SetFrequency(hz) => {
-                self.status.frequency_hz = hz;
-                self.ok(format!("Frequency set to {} Hz", hz))
-            }
-            RadioCommand::GetFrequency => {
-                self.ok(format!("Frequency: {} Hz", self.status.frequency_hz))
-            }
-            RadioCommand::SetBand(band) => {
-                self.status.band = band;
-                self.status.frequency_hz = default_frequency_for_band(band);
-                self.ok(format!("Band set to {band}"))
-            }
-            RadioCommand::GetBand => self.ok(format!("Band: {}", self.status.band)),
-            RadioCommand::SetMode(mode) => {
-                self.status.mode = mode;
-                self.ok(format!("Mode set to {mode}"))
-            }
-            RadioCommand::GetMode => self.ok(format!("Mode: {}", self.status.mode)),
-            RadioCommand::Tune => {
-                self.status.tuning = true;
-                self.ok("Tuning started".into())
-            }
-            RadioCommand::PttOn => {
-                self.status.ptt = true;
-                self.ok("PTT on".into())
-            }
-            RadioCommand::PttOff => {
-                self.status.ptt = false;
-                self.ok("PTT off".into())
-            }
-            RadioCommand::SetPower(pct) => {
-                self.status.power = pct.min(100);
-                self.ok(format!("Power set to {}%", self.status.power))
-            }
-            RadioCommand::GetPower => self.ok(format!("Power: {}%", self.status.power)),
-            RadioCommand::SetVolume(pct) => {
-                self.status.volume = pct.min(100);
-                self.ok(format!("Volume set to {}%", self.status.volume))
-            }
-            RadioCommand::GetVolume => self.ok(format!("Volume: {}%", self.status.volume)),
-            RadioCommand::SetAgc(agc) => {
-                self.status.agc = agc;
-                self.ok(format!("AGC set to {agc}"))
-            }
-            RadioCommand::GetAgc => self.ok(format!("AGC: {}", self.status.agc)),
-            RadioCommand::GetStatus => self.ok("Radio status".into()),
-        }
-    }
+    /// Serial port baud rate
+    #[arg(long, default_value = "9600")]
+    baud: u32,
 
-    fn ok(&self, message: String) -> RadioxideResponse {
-        RadioxideResponse {
-            success: true,
-            message,
-            status: Some(self.status.clone()),
-        }
-    }
-}
-
-fn default_frequency_for_band(band: Band) -> u64 {
-    match band {
-        Band::Band160m => 1_840_000,
-        Band::Band80m => 3_573_000,
-        Band::Band60m => 5_357_000,
-        Band::Band40m => 7_074_000,
-        Band::Band30m => 10_136_000,
-        Band::Band20m => 14_074_000,
-        Band::Band17m => 18_100_000,
-        Band::Band15m => 21_074_000,
-        Band::Band12m => 24_915_000,
-        Band::Band10m => 28_074_000,
-        Band::Band6m => 50_313_000,
-        Band::Band2m => 144_200_000,
-        Band::Band70cm => 432_200_000,
-    }
+    /// Listen address
+    #[arg(long, default_value = DEFAULT_ADDR)]
+    addr: String,
 }
 
 #[tokio::main]
 async fn main() {
-    println!("Radioxide daemon starting...");
+    let args = Args::parse();
 
-    let state = Arc::new(Mutex::new(RadioState::new()));
-
-    let handler = move |msg: RadioxideMessage| -> RadioxideResponse {
-        let mut state = state.lock().unwrap();
-        println!("Received: {:?}", msg.command);
-        state.handle(msg.command)
+    let radio: Arc<dyn Radio> = if let Some(port) = args.serial {
+        println!("Opening serial port {port} at {} baud...", args.baud);
+        let config = SerialConfig::new(port, args.baud);
+        match Ft450d::new(config) {
+            Ok(r) => Arc::new(r),
+            Err(e) => {
+                eprintln!("Failed to open radio: {e}");
+                std::process::exit(1);
+            }
+        }
+    } else {
+        println!("No --serial specified, using dummy backend");
+        Arc::new(DummyRadio::new())
     };
 
-    if let Err(e) = tcp::start_server(DEFAULT_ADDR, handler).await {
+    println!("Radioxide daemon starting...");
+
+    let handler = move |msg: RadioxideMessage| {
+        let radio = radio.clone();
+        async move { dispatch(radio, msg).await }
+    };
+
+    if let Err(e) = tcp::start_server(&args.addr, handler).await {
         eprintln!("Daemon error: {e}");
     }
 }
+
+async fn dispatch(radio: Arc<dyn Radio>, msg: RadioxideMessage) -> RadioxideResponse {
+    println!("Received: {:?}", msg.command);
+
+    // Get commands return a formatted value; Set commands return a confirmation message.
+    // Both include current status in the response.
+    let result: Result<String, radio::BackendError> = match msg.command {
+        RadioCommand::SetFrequency(hz) => radio.set_frequency(hz).await.map(|_| "Frequency set".into()),
+        RadioCommand::GetFrequency => radio.get_frequency().await.map(|hz| format!("Frequency: {hz} Hz")),
+        RadioCommand::SetBand(band) => radio.set_band(band).await.map(|_| format!("Band set to {band}")),
+        RadioCommand::GetBand => radio.get_band().await.map(|b| format!("Band: {b}")),
+        RadioCommand::SetMode(mode) => radio.set_mode(mode).await.map(|_| format!("Mode set to {mode}")),
+        RadioCommand::GetMode => radio.get_mode().await.map(|m| format!("Mode: {m}")),
+        RadioCommand::Tune => radio.tune().await.map(|_| "Tuning started".into()),
+        RadioCommand::PttOn => radio.set_ptt(true).await.map(|_| "PTT on".into()),
+        RadioCommand::PttOff => radio.set_ptt(false).await.map(|_| "PTT off".into()),
+        RadioCommand::SetPower(pct) => radio.set_power(pct).await.map(|_| format!("Power set to {pct}%")),
+        RadioCommand::GetPower => radio.get_power().await.map(|p| format!("Power: {p}%")),
+        RadioCommand::SetVolume(pct) => radio.set_volume(pct).await.map(|_| format!("Volume set to {pct}%")),
+        RadioCommand::GetVolume => radio.get_volume().await.map(|v| format!("Volume: {v}%")),
+        RadioCommand::SetAgc(agc) => radio.set_agc(agc).await.map(|_| format!("AGC set to {agc}")),
+        RadioCommand::GetAgc => radio.get_agc().await.map(|a| format!("AGC: {a}")),
+        RadioCommand::GetStatus => radio.get_status().await.map(|_| "Radio status".into()),
+    };
+
+    match result {
+        Ok(message) => {
+            let status = radio.get_status().await.ok();
+            RadioxideResponse {
+                success: true,
+                message,
+                status,
+            }
+        }
+        Err(e) => RadioxideResponse {
+            success: false,
+            message: format!("Error: {e}"),
+            status: None,
+        },
+    }
+}
+

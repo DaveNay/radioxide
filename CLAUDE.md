@@ -22,7 +22,7 @@ cargo run -p radioxide-gui
 # Check (faster than build, no codegen)
 cargo check --workspace
 
-# Run tests (none exist yet)
+# Run tests
 cargo test --workspace
 
 # Clippy lint
@@ -40,7 +40,10 @@ radioxide-transports     (lib)  Two transport backends:
     │                           - tcp module: async TCP server/client (tokio)
     │                           - dbus module: D-Bus interface via zbus (com.radioxide.Daemon)
     ↓
-radioxide-daemon         (bin)  Background service with in-memory radio state
+radioxide-daemon         (bin)  Background service with Radio trait backend:
+    │                           - radio/dummy.rs: in-memory mock (default when no --serial)
+    │                           - radio/yaesu/ft450d.rs: Yaesu FT-450D via CAT over serial
+    │                           Uses --serial /dev/ttyUSB0 --baud 9600 CLI args
 radioxide-cli            (bin)  CLI client using clap v4 derive
 radioxide-gui            (bin)  Reference GUI client using iced v0.13.0 (freq, band, mode, AGC, power, volume, PTT, tune)
 ```
@@ -56,6 +59,10 @@ All three binaries depend on both `radioxide-proto` and `radioxide-transports`. 
 - `RadioStatus` (proto): full radio state snapshot (frequency, band, mode, power, volume, AGC, PTT, tuning)
 - `RadioxideMessage` (proto): envelope with `command: RadioCommand`
 - `RadioxideResponse` (proto): `success`, `message`, optional `status: RadioStatus`
+- `Radio` (daemon::radio): async trait for radio hardware abstraction — `set_frequency`, `get_frequency`, `set_mode`, etc.
+- `DummyRadio` (daemon::radio::dummy): in-memory mock implementation
+- `Ft450d` (daemon::radio::yaesu::ft450d): Yaesu FT-450D via CAT serial protocol
+- `CatPort` (daemon::radio::yaesu::serial): async serial port wrapper for CAT commands
 - `RadioxideDBus` (transports::dbus): D-Bus interface struct at path `/com/radioxide/Daemon`
 
 ## Platform-Specific Notes

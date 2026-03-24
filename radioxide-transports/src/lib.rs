@@ -29,9 +29,11 @@ pub mod tcp {
 
     /// Start a TCP server that deserializes incoming `RadioxideMessage`s and
     /// invokes `handler` for each one, sending the returned response back.
-    pub async fn start_server<F>(addr: &str, handler: F) -> tokio::io::Result<()>
+    /// The handler returns a future, allowing async operations (e.g., serial I/O).
+    pub async fn start_server<F, Fut>(addr: &str, handler: F) -> tokio::io::Result<()>
     where
-        F: Fn(RadioxideMessage) -> RadioxideResponse + Send + Sync + 'static,
+        F: Fn(RadioxideMessage) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = RadioxideResponse> + Send,
     {
         let handler = std::sync::Arc::new(handler);
         let listener = TcpListener::bind(addr).await?;
@@ -56,7 +58,7 @@ pub mod tcp {
                             continue;
                         }
                     };
-                    let resp = handler(msg);
+                    let resp = handler(msg).await;
                     let data = serde_json::to_vec(&resp).unwrap();
                     if write_frame(&mut socket, &data).await.is_err() {
                         break;
