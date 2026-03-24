@@ -1,40 +1,109 @@
 mod radio;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use clap::Parser;
 use radioxide_proto::{RadioCommand, RadioxideMessage, RadioxideResponse, DEFAULT_ADDR};
 use radioxide_transports::tcp;
+use serde::{Deserialize, Serialize};
 
 use radio::dummy::DummyRadio;
 use radio::yaesu::ft450d::Ft450d;
 use radio::yaesu::serial::SerialConfig;
 use radio::Radio;
 
-#[derive(Parser)]
-#[command(name = "radioxide-daemon", about = "Radioxide radio control daemon")]
-struct Args {
-    /// Serial port for the radio (e.g., /dev/ttyUSB0). If omitted, uses a dummy backend.
-    #[arg(long)]
-    serial: Option<String>,
-
-    /// Serial port baud rate
-    #[arg(long, default_value = "9600")]
-    baud: u32,
-
-    /// Listen address
-    #[arg(long, default_value = DEFAULT_ADDR)]
+#[derive(Serialize, Deserialize, Debug)]
+struct Config {
+    /// Listen address for the TCP server.
+    #[serde(default = "default_addr")]
     addr: String,
+
+    /// Radio backend configuration. If absent, uses dummy backend.
+    #[serde(default)]
+    radio: Option<RadioConfig>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct RadioConfig {
+    /// Serial port path (e.g., "/dev/ttyUSB0" or "COM3").
+    serial: String,
+
+    /// Baud rate for the serial port.
+    #[serde(default = "default_baud")]
+    baud: u32,
+}
+
+fn default_addr() -> String {
+    DEFAULT_ADDR.to_string()
+}
+
+fn default_baud() -> u32 {
+    9600
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            addr: default_addr(),
+            radio: None,
+        }
+    }
+}
+
+fn config_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("radioxide")
+        .join("config.json")
+}
+
+fn load_config() -> Config {
+    let path = config_path();
+
+    if !path.exists() {
+        println!("No config file found at {}", path.display());
+        println!("Using defaults. Create {} to configure.", path.display());
+
+        // Create the config directory and write a default config
+        if let Some(parent) = path.parent() {
+            if std::fs::create_dir_all(parent).is_ok() {
+                let default = Config::default();
+                if let Ok(json) = serde_json::to_string_pretty(&default) {
+                    let _ = std::fs::write(&path, json);
+                    println!("Wrote default config to {}", path.display());
+                }
+            }
+        }
+
+        return Config::default();
+    }
+
+    match std::fs::read_to_string(&path) {
+        Ok(contents) => match serde_json::from_str(&contents) {
+            Ok(config) => {
+                println!("Loaded config from {}", path.display());
+                config
+            }
+            Err(e) => {
+                eprintln!("Error parsing {}: {e}", path.display());
+                std::process::exit(1);
+            }
+        },
+        Err(e) => {
+            eprintln!("Error reading {}: {e}", path.display());
+            std::process::exit(1);
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() {
-    let args = Args::parse();
+    let config = load_config();
 
-    let radio: Arc<dyn Radio> = if let Some(port) = args.serial {
-        println!("Opening serial port {port} at {} baud...", args.baud);
-        let config = SerialConfig::new(port, args.baud);
-        match Ft450d::new(config) {
+    let radio: Arc<dyn Radio> = if let Some(ref rc) = config.radio {
+        println!("Opening serial port {} at {} baud...", rc.serial, rc.baud);
+        let serial_config = SerialConfig::new(rc.serial.clone(), rc.baud);
+        match Ft450d::new(serial_config) {
             Ok(r) => Arc::new(r),
             Err(e) => {
                 eprintln!("Failed to open radio: {e}");
@@ -42,7 +111,7 @@ async fn main() {
             }
         }
     } else {
-        println!("No --serial specified, using dummy backend");
+        println!("No radio configured, using dummy backend");
         Arc::new(DummyRadio::new())
     };
 
@@ -53,7 +122,7 @@ async fn main() {
         async move { dispatch(radio, msg).await }
     };
 
-    if let Err(e) = tcp::start_server(&args.addr, handler).await {
+    if let Err(e) = tcp::start_server(&config.addr, handler).await {
         eprintln!("Daemon error: {e}");
     }
 }
@@ -61,8 +130,6 @@ async fn main() {
 async fn dispatch(radio: Arc<dyn Radio>, msg: RadioxideMessage) -> RadioxideResponse {
     println!("Received: {:?}", msg.command);
 
-    // Get commands return a formatted value; Set commands return a confirmation message.
-    // Both include current status in the response.
     let result: Result<String, radio::BackendError> = match msg.command {
         RadioCommand::SetFrequency(hz) => radio.set_frequency(hz).await.map(|_| "Frequency set".into()),
         RadioCommand::GetFrequency => radio.get_frequency().await.map(|hz| format!("Frequency: {hz} Hz")),
@@ -98,4 +165,3 @@ async fn dispatch(radio: Arc<dyn Radio>, msg: RadioxideMessage) -> RadioxideResp
         },
     }
 }
-

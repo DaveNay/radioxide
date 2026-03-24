@@ -43,7 +43,7 @@ radioxide-transports     (lib)  Two transport backends:
 radioxide-daemon         (bin)  Background service with Radio trait backend:
     │                           - radio/dummy.rs: in-memory mock (default when no --serial)
     │                           - radio/yaesu/ft450d.rs: Yaesu FT-450D via CAT over serial
-    │                           Uses --serial /dev/ttyUSB0 --baud 9600 CLI args
+    │                           Configured via ~/.config/radioxide/config.json
 radioxide-cli            (bin)  CLI client using clap v4 derive
 radioxide-gui            (bin)  Reference GUI client using iced v0.13.0 (freq, band, mode, AGC, power, volume, PTT, tune)
 ```
