@@ -1,17 +1,37 @@
-use iced::widget::{button, column, container, pick_list, row, slider, text, text_input};
-use iced::{Element, Length, Task};
+mod i18n;
+mod styles;
+mod theme;
+mod widgets;
+
+use iced::widget::{button, column, container, row, slider, text, text_input, Space};
+use iced::{Element, Font, Length, Task};
 use radioxide_proto::{
     Agc, Band, Mode, RadioCommand, RadioStatus, RadioxideMessage, RadioxideResponse, DEFAULT_ADDR,
 };
 use radioxide_transports::tcp;
 
+use i18n::I18n;
+use styles::*;
+use theme::*;
+
+const MONO_FONT: Font = Font {
+    family: iced::font::Family::Name("JetBrains Mono"),
+    weight: iced::font::Weight::Bold,
+    stretch: iced::font::Stretch::Normal,
+    style: iced::font::Style::Normal,
+};
+
 fn main() -> iced::Result {
     iced::application("Radioxide", RadioxideGUI::update, RadioxideGUI::view)
+        .font(include_bytes!("../resources/fonts/JetBrainsMono-Bold.ttf").as_slice())
+        .theme(|_| radioxide_theme())
+        .window_size(iced::Size::new(680.0, 540.0))
         .run_with(|| {
             let gui = RadioxideGUI::new();
-            let cmd = Task::perform(async { send_cmd(RadioCommand::GetStatus).await }, |r| {
-                Message::Response(r)
-            });
+            let cmd = Task::perform(
+                async { send_cmd(RadioCommand::GetStatus).await },
+                Message::Response,
+            );
             (gui, cmd)
         })
 }
@@ -21,26 +41,21 @@ struct RadioxideGUI {
     freq_input: String,
     connected: bool,
     last_message: String,
+    i18n: I18n,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
-    // Band/mode selectors
     BandSelected(Band),
     ModeSelected(Mode),
     AgcSelected(Agc),
-    // Frequency entry
     FreqInputChanged(String),
     FreqSubmit,
-    // Sliders
     PowerChanged(u8),
     VolumeChanged(u8),
-    // Buttons
     TunePressed,
-    PttOn,
-    PttOff,
+    PttToggle,
     RefreshStatus,
-    // Response from daemon
     Response(Result<RadioxideResponse, String>),
 }
 
@@ -52,7 +67,8 @@ impl RadioxideGUI {
             status,
             freq_input: freq,
             connected: false,
-            last_message: "Connecting...".into(),
+            last_message: String::new(),
+            i18n: I18n::new(),
         }
     }
 
@@ -73,15 +89,20 @@ impl RadioxideGUI {
                 if let Ok(hz) = self.freq_input.parse::<u64>() {
                     Self::send(RadioCommand::SetFrequency(hz))
                 } else {
-                    self.last_message = "Invalid frequency".into();
+                    self.last_message = self.i18n.t("invalid-freq");
                     Task::none()
                 }
             }
             Message::PowerChanged(pct) => Self::send(RadioCommand::SetPower(pct)),
             Message::VolumeChanged(pct) => Self::send(RadioCommand::SetVolume(pct)),
             Message::TunePressed => Self::send(RadioCommand::Tune),
-            Message::PttOn => Self::send(RadioCommand::PttOn),
-            Message::PttOff => Self::send(RadioCommand::PttOff),
+            Message::PttToggle => {
+                if self.status.ptt {
+                    Self::send(RadioCommand::PttOff)
+                } else {
+                    Self::send(RadioCommand::PttOn)
+                }
+            }
             Message::RefreshStatus => Self::send(RadioCommand::GetStatus),
             Message::Response(Ok(resp)) => {
                 self.connected = true;
@@ -101,97 +122,217 @@ impl RadioxideGUI {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let conn_status = if self.connected { "Connected" } else { "Disconnected" };
-
-        // Frequency section
-        let freq_display = text(format_frequency(self.status.frequency_hz)).size(32);
-        let freq_row = row![
-            text("Freq (Hz): ").size(16),
-            text_input("14074000", &self.freq_input)
-                .on_input(Message::FreqInputChanged)
-                .on_submit(Message::FreqSubmit)
-                .width(Length::Fixed(150.0)),
-            button("Set").on_press(Message::FreqSubmit),
-        ]
-        .spacing(10)
-        .align_y(iced::Alignment::Center);
-
-        // Band selector
-        let band_row = row![
-            text("Band: ").size(16),
-            pick_list(&ALL_BANDS[..], Some(self.status.band), Message::BandSelected),
-        ]
-        .spacing(10)
-        .align_y(iced::Alignment::Center);
-
-        // Mode selector
-        let mode_row = row![
-            text("Mode: ").size(16),
-            pick_list(&ALL_MODES[..], Some(self.status.mode), Message::ModeSelected),
-        ]
-        .spacing(10)
-        .align_y(iced::Alignment::Center);
-
-        // AGC selector
-        let agc_row = row![
-            text("AGC:  ").size(16),
-            pick_list(&ALL_AGC[..], Some(self.status.agc), Message::AgcSelected),
-        ]
-        .spacing(10)
-        .align_y(iced::Alignment::Center);
-
-        // Power slider
-        let power_row = row![
-            text(format!("Power: {}%", self.status.power)).size(16),
-            slider(0..=100, self.status.power, Message::PowerChanged),
-        ]
-        .spacing(10)
-        .align_y(iced::Alignment::Center);
-
-        // Volume slider
-        let volume_row = row![
-            text(format!("Volume: {}%", self.status.volume)).size(16),
-            slider(0..=100, self.status.volume, Message::VolumeChanged),
-        ]
-        .spacing(10)
-        .align_y(iced::Alignment::Center);
-
-        // Control buttons
-        let controls = row![
-            button("Tune").on_press(Message::TunePressed),
-            button("PTT ON").on_press(Message::PttOn),
-            button("PTT OFF").on_press(Message::PttOff),
-            button("Refresh").on_press(Message::RefreshStatus),
-        ]
-        .spacing(10);
-
-        // Status bar
-        let status_bar = row![
-            text(conn_status).size(14),
-            text(" | ").size(14),
-            text(&self.last_message).size(14),
-        ];
-
         let content = column![
-            freq_display,
-            freq_row,
-            band_row,
-            mode_row,
-            agc_row,
-            power_row,
-            volume_row,
-            controls,
-            status_bar,
+            self.view_header(),
+            self.view_frequency_panel(),
+            row![self.view_band_panel(), self.view_mode_panel(),]
+                .spacing(8)
+                .width(Length::Fill),
+            row![self.view_agc_panel(), self.view_controls_panel(),]
+                .spacing(8)
+                .width(Length::Fill),
+            self.view_sliders_panel(),
+            self.view_status_bar(),
         ]
-        .spacing(12)
-        .padding(20)
+        .spacing(8)
+        .padding(12)
         .width(Length::Fill);
 
-        container(content).into()
+        container(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+    }
+
+    fn view_header(&self) -> Element<'_, Message> {
+        let led_color = if self.connected { LED_GREEN } else { LED_RED };
+        let led = text("●").size(14).color(led_color);
+
+        let title = text(self.i18n.t("app-title"))
+            .size(16)
+            .color(TEXT_PRIMARY);
+
+        let refresh_btn = button(text(self.i18n.t("refresh")).size(12))
+            .on_press(Message::RefreshStatus)
+            .style(action_button)
+            .padding([4, 10]);
+
+        row![led, title, Space::with_width(Length::Fill), refresh_btn,]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill)
+            .into()
+    }
+
+    fn view_frequency_panel(&self) -> Element<'_, Message> {
+        let freq_text = text(format_frequency(self.status.frequency_hz))
+            .font(MONO_FONT)
+            .size(48)
+            .color(FREQ_GREEN);
+
+        let hz_label = text(self.i18n.t("freq-hz"))
+            .font(MONO_FONT)
+            .size(20)
+            .color(FREQ_GREEN);
+
+        let band_mode = text(format!("{}  {}", self.status.band, self.status.mode))
+            .size(16)
+            .color(TEXT_DIM);
+
+        let freq_display = row![freq_text, hz_label, Space::with_width(Length::Fill), band_mode,]
+            .spacing(8)
+            .align_y(iced::Alignment::End);
+
+        let freq_input = text_input(&self.i18n.t("freq-placeholder"), &self.freq_input)
+            .on_input(Message::FreqInputChanged)
+            .on_submit(Message::FreqSubmit)
+            .style(freq_input_style)
+            .font(MONO_FONT)
+            .size(14)
+            .width(Length::Fixed(180.0));
+
+        let set_btn = button(text(self.i18n.t("freq-set")).size(13))
+            .on_press(Message::FreqSubmit)
+            .style(action_button)
+            .padding([4, 12]);
+
+        let input_row = row![
+            text(self.i18n.t("freq-label")).size(13).color(TEXT_DIM),
+            freq_input,
+            set_btn,
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center);
+
+        container(column![freq_display, input_row,].spacing(10).padding(16))
+            .width(Length::Fill)
+            .style(freq_display_panel)
+            .into()
+    }
+
+    fn view_band_panel(&self) -> Element<'_, Message> {
+        let label = text(self.i18n.t("band-label"))
+            .size(11)
+            .color(TEXT_DIM);
+
+        let buttons = widgets::toggle_button_row(&ALL_BANDS, self.status.band, Message::BandSelected, 5);
+
+        container(column![label, buttons].spacing(6).padding(10))
+            .width(Length::Fill)
+            .style(panel_style)
+            .into()
+    }
+
+    fn view_mode_panel(&self) -> Element<'_, Message> {
+        let label = text(self.i18n.t("mode-label"))
+            .size(11)
+            .color(TEXT_DIM);
+
+        let buttons = widgets::toggle_button_row(&ALL_MODES, self.status.mode, Message::ModeSelected, 4);
+
+        container(column![label, buttons].spacing(6).padding(10))
+            .width(Length::Fill)
+            .style(panel_style)
+            .into()
+    }
+
+    fn view_agc_panel(&self) -> Element<'_, Message> {
+        let label = text(self.i18n.t("agc-label"))
+            .size(11)
+            .color(TEXT_DIM);
+
+        let buttons = widgets::toggle_button_row(&ALL_AGC, self.status.agc, Message::AgcSelected, 4);
+
+        container(column![label, buttons].spacing(6).padding(10))
+            .width(Length::Fill)
+            .style(panel_style)
+            .into()
+    }
+
+    fn view_controls_panel(&self) -> Element<'_, Message> {
+        let label = text(self.i18n.t("controls-label"))
+            .size(11)
+            .color(TEXT_DIM);
+
+        let tune_btn = button(text(self.i18n.t("tune")).size(14))
+            .on_press(Message::TunePressed)
+            .style(tune_button(self.status.tuning))
+            .padding([6, 20]);
+
+        let ptt_label = if self.status.ptt {
+            self.i18n.t("ptt-tx")
+        } else {
+            self.i18n.t("ptt")
+        };
+        let ptt_btn = button(text(ptt_label).size(14))
+            .on_press(Message::PttToggle)
+            .style(ptt_button(self.status.ptt))
+            .padding([6, 20]);
+
+        container(
+            column![label, row![tune_btn, ptt_btn,].spacing(8),]
+                .spacing(6)
+                .padding(10),
+        )
+        .width(Length::Fill)
+        .style(panel_style)
+        .into()
+    }
+
+    fn view_sliders_panel(&self) -> Element<'_, Message> {
+        let power_label = text(format!("{} {}%", self.i18n.t("power-label"), self.status.power))
+            .size(13)
+            .color(TEXT_DIM);
+
+        let power_slider = slider(0..=100, self.status.power, Message::PowerChanged).style(radio_slider);
+
+        let vol_label = text(format!("{} {}%", self.i18n.t("volume-label"), self.status.volume))
+            .size(13)
+            .color(TEXT_DIM);
+
+        let vol_slider = slider(0..=100, self.status.volume, Message::VolumeChanged).style(radio_slider);
+
+        container(
+            row![
+                column![power_label, power_slider,]
+                    .spacing(4)
+                    .width(Length::Fill),
+                column![vol_label, vol_slider,]
+                    .spacing(4)
+                    .width(Length::Fill),
+            ]
+            .spacing(20)
+            .padding(10),
+        )
+        .width(Length::Fill)
+        .style(panel_style)
+        .into()
+    }
+
+    fn view_status_bar(&self) -> Element<'_, Message> {
+        let conn_text = if self.connected {
+            self.i18n.t("connected")
+        } else {
+            self.i18n.t("disconnected")
+        };
+        let conn_color = if self.connected { LED_GREEN } else { LED_RED };
+
+        container(
+            row![
+                text(conn_text).size(12).color(conn_color),
+                text(" │ ").size(12).color(TEXT_DIM),
+                text(&self.last_message).size(12).color(TEXT_DIM),
+            ]
+            .align_y(iced::Alignment::Center),
+        )
+        .width(Length::Fill)
+        .style(status_bar_style)
+        .padding([6, 4])
+        .into()
     }
 }
 
-/// Format frequency for display (e.g., 14,074,000 Hz).
+/// Format frequency for display (e.g., "14,074,000").
 fn format_frequency(hz: u64) -> String {
     let s = hz.to_string();
     let mut result = String::new();
@@ -201,7 +342,7 @@ fn format_frequency(hz: u64) -> String {
         }
         result.push(ch);
     }
-    format!("{} Hz", result.chars().rev().collect::<String>())
+    result.chars().rev().collect()
 }
 
 async fn send_cmd(cmd: RadioCommand) -> Result<RadioxideResponse, String> {
@@ -211,7 +352,6 @@ async fn send_cmd(cmd: RadioCommand) -> Result<RadioxideResponse, String> {
         .map_err(|e| e.to_string())
 }
 
-// Pick-list data — iced needs &[T] where T: Display + Eq
 const ALL_BANDS: [Band; 13] = [
     Band::Band160m,
     Band::Band80m,
