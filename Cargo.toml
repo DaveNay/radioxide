@@ -1,0 +1,9 @@
+[workspace]
+resolver = "3"
+members = [
+    "radioxide-gui",
+    "radioxide-daemon",
+    "radioxide-cli",
+    "radioxide-proto",
+    "radioxide-transports"
+]

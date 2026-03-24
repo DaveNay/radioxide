@@ -1,0 +1,10 @@
+[package]
+name = "radioxide-gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+iced = "0.13.0"
+tokio = { version = "1", features = ["full"] }
+radioxide-proto = { path = "../radioxide-proto" }
+radioxide-transports = { path = "../radioxide-transports" }
