@@ -24,3 +24,4 @@ connected = Connected
 disconnected = Disconnected
 refresh = Refresh
 invalid-freq = Invalid frequency
+knob-label = TUNE

@@ -1,4 +1,5 @@
 mod i18n;
+mod knob;
 mod styles;
 mod theme;
 mod widgets;
@@ -25,7 +26,7 @@ fn main() -> iced::Result {
     iced::application("Radioxide", RadioxideGUI::update, RadioxideGUI::view)
         .font(include_bytes!("../resources/fonts/JetBrainsMono-Bold.ttf").as_slice())
         .theme(|_| radioxide_theme())
-        .window_size(iced::Size::new(680.0, 540.0))
+        .window_size(iced::Size::new(840.0, 540.0))
         .run_with(|| {
             let gui = RadioxideGUI::new();
             let cmd = Task::perform(
@@ -42,6 +43,7 @@ struct RadioxideGUI {
     connected: bool,
     last_message: String,
     i18n: I18n,
+    knob_on_left: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +58,8 @@ enum Message {
     TunePressed,
     PttToggle,
     RefreshStatus,
+    KnobTurned(knob::KnobMessage),
+    ToggleKnobSide,
     Response(Result<RadioxideResponse, String>),
 }
 
@@ -69,6 +73,7 @@ impl RadioxideGUI {
             connected: false,
             last_message: String::new(),
             i18n: I18n::new(),
+            knob_on_left: false,
         }
     }
 
@@ -104,6 +109,17 @@ impl RadioxideGUI {
                 }
             }
             Message::RefreshStatus => Self::send(RadioCommand::GetStatus),
+            Message::KnobTurned(knob::KnobMessage::FreqDelta(delta)) => {
+                let new_freq =
+                    (self.status.frequency_hz as i64 + delta).clamp(30_000, 60_000_000) as u64;
+                self.status.frequency_hz = new_freq;
+                self.freq_input = new_freq.to_string();
+                Self::send(RadioCommand::SetFrequency(new_freq))
+            }
+            Message::ToggleKnobSide => {
+                self.knob_on_left = !self.knob_on_left;
+                Task::none()
+            }
             Message::Response(Ok(resp)) => {
                 self.connected = true;
                 self.last_message = resp.message.clone();
@@ -122,9 +138,23 @@ impl RadioxideGUI {
     }
 
     fn view(&self) -> Element<'_, Message> {
+        let knob_widget = self.view_knob_panel();
+        let freq_panel = self.view_frequency_panel();
+        let freq_row: Element<'_, Message> = if self.knob_on_left {
+            row![knob_widget, freq_panel]
+                .spacing(8)
+                .width(Length::Fill)
+                .into()
+        } else {
+            row![freq_panel, knob_widget]
+                .spacing(8)
+                .width(Length::Fill)
+                .into()
+        };
+
         let content = column![
             self.view_header(),
-            self.view_frequency_panel(),
+            freq_row,
             row![self.view_band_panel(), self.view_mode_panel(),]
                 .spacing(8)
                 .width(Length::Fill),
@@ -208,6 +238,26 @@ impl RadioxideGUI {
             .width(Length::Fill)
             .style(freq_display_panel)
             .into()
+    }
+
+    fn view_knob_panel(&self) -> Element<'_, Message> {
+        let knob_canvas: Element<'_, knob::KnobMessage> = knob::view_knob();
+        let knob_mapped: Element<'_, Message> = knob_canvas.map(Message::KnobTurned);
+
+        let side_label = if self.knob_on_left { "L" } else { "R" };
+        let swap_btn = button(text(side_label).size(10))
+            .on_press(Message::ToggleKnobSide)
+            .style(action_button)
+            .padding([2, 6]);
+
+        container(
+            column![knob_mapped, swap_btn]
+                .spacing(4)
+                .align_x(iced::Alignment::Center),
+        )
+        .style(panel_style)
+        .padding(8)
+        .into()
     }
 
     fn view_band_panel(&self) -> Element<'_, Message> {
@@ -347,8 +397,13 @@ fn format_frequency(hz: u64) -> String {
 
 async fn send_cmd(cmd: RadioCommand) -> Result<RadioxideResponse, String> {
     let msg = RadioxideMessage { command: cmd };
-    tcp::send_message(DEFAULT_ADDR, &msg)
-        .await
+    // iced uses its own async executor (not Tokio), so we need a Tokio runtime
+    // for the TCP networking operations.
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| e.to_string())?
+        .block_on(tcp::send_message(DEFAULT_ADDR, &msg))
         .map_err(|e| e.to_string())
 }
 
