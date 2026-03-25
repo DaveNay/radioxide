@@ -244,3 +244,179 @@ pub struct RadioxideResponse {
     /// Full radio status, included when relevant (e.g., GetStatus, after Set* commands).
     pub status: Option<RadioStatus>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn band_display() {
+        let expected = [
+            (Band::Band160m, "160m"),
+            (Band::Band80m, "80m"),
+            (Band::Band60m, "60m"),
+            (Band::Band40m, "40m"),
+            (Band::Band30m, "30m"),
+            (Band::Band20m, "20m"),
+            (Band::Band17m, "17m"),
+            (Band::Band15m, "15m"),
+            (Band::Band12m, "12m"),
+            (Band::Band10m, "10m"),
+            (Band::Band6m, "6m"),
+            (Band::Band2m, "2m"),
+            (Band::Band70cm, "70cm"),
+        ];
+        for (band, s) in expected {
+            assert_eq!(band.to_string(), s);
+        }
+    }
+
+    #[test]
+    fn band_from_str() {
+        for s in ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm"] {
+            let band: Band = s.parse().unwrap();
+            assert_eq!(band.to_string().to_lowercase(), s.to_lowercase());
+        }
+        // Case insensitivity
+        assert_eq!("20M".parse::<Band>().unwrap(), Band::Band20m);
+        assert_eq!("70CM".parse::<Band>().unwrap(), Band::Band70cm);
+    }
+
+    #[test]
+    fn band_from_str_invalid() {
+        assert!("99m".parse::<Band>().is_err());
+        assert!("".parse::<Band>().is_err());
+        assert!("HF".parse::<Band>().is_err());
+    }
+
+    #[test]
+    fn mode_display() {
+        let expected = [
+            (Mode::LSB, "LSB"),
+            (Mode::USB, "USB"),
+            (Mode::CW, "CW"),
+            (Mode::AM, "AM"),
+            (Mode::FM, "FM"),
+            (Mode::Digital, "DIG"),
+            (Mode::CWR, "CW-R"),
+            (Mode::DigitalR, "DIG-R"),
+        ];
+        for (mode, s) in expected {
+            assert_eq!(mode.to_string(), s);
+        }
+    }
+
+    #[test]
+    fn mode_from_str() {
+        assert_eq!("LSB".parse::<Mode>().unwrap(), Mode::LSB);
+        assert_eq!("USB".parse::<Mode>().unwrap(), Mode::USB);
+        assert_eq!("CW".parse::<Mode>().unwrap(), Mode::CW);
+        assert_eq!("AM".parse::<Mode>().unwrap(), Mode::AM);
+        assert_eq!("FM".parse::<Mode>().unwrap(), Mode::FM);
+        assert_eq!("DIG".parse::<Mode>().unwrap(), Mode::Digital);
+        assert_eq!("DIGITAL".parse::<Mode>().unwrap(), Mode::Digital);
+        assert_eq!("CW-R".parse::<Mode>().unwrap(), Mode::CWR);
+        assert_eq!("CWR".parse::<Mode>().unwrap(), Mode::CWR);
+        assert_eq!("DIG-R".parse::<Mode>().unwrap(), Mode::DigitalR);
+        assert_eq!("DIGITALR".parse::<Mode>().unwrap(), Mode::DigitalR);
+        assert_eq!("DIGITAL-R".parse::<Mode>().unwrap(), Mode::DigitalR);
+        // Case insensitivity
+        assert_eq!("lsb".parse::<Mode>().unwrap(), Mode::LSB);
+        assert_eq!("dig".parse::<Mode>().unwrap(), Mode::Digital);
+    }
+
+    #[test]
+    fn mode_from_str_invalid() {
+        assert!("SSB".parse::<Mode>().is_err());
+        assert!("".parse::<Mode>().is_err());
+    }
+
+    #[test]
+    fn agc_display() {
+        assert_eq!(Agc::Off.to_string(), "OFF");
+        assert_eq!(Agc::Fast.to_string(), "FAST");
+        assert_eq!(Agc::Medium.to_string(), "MED");
+        assert_eq!(Agc::Slow.to_string(), "SLOW");
+    }
+
+    #[test]
+    fn agc_from_str() {
+        assert_eq!("OFF".parse::<Agc>().unwrap(), Agc::Off);
+        assert_eq!("FAST".parse::<Agc>().unwrap(), Agc::Fast);
+        assert_eq!("MED".parse::<Agc>().unwrap(), Agc::Medium);
+        assert_eq!("MEDIUM".parse::<Agc>().unwrap(), Agc::Medium);
+        assert_eq!("SLOW".parse::<Agc>().unwrap(), Agc::Slow);
+        // Case insensitivity
+        assert_eq!("off".parse::<Agc>().unwrap(), Agc::Off);
+        assert_eq!("slow".parse::<Agc>().unwrap(), Agc::Slow);
+    }
+
+    #[test]
+    fn agc_from_str_invalid() {
+        assert!("TURBO".parse::<Agc>().is_err());
+        assert!("".parse::<Agc>().is_err());
+    }
+
+    #[test]
+    fn radio_status_default() {
+        let s = RadioStatus::default();
+        assert_eq!(s.frequency_hz, 14_200_000);
+        assert_eq!(s.band, Band::Band20m);
+        assert_eq!(s.mode, Mode::USB);
+        assert_eq!(s.power, 50);
+        assert_eq!(s.volume, 50);
+        assert_eq!(s.agc, Agc::Medium);
+        assert!(!s.ptt);
+        assert!(!s.tuning);
+    }
+
+    #[test]
+    fn message_json_roundtrip() {
+        let msg = RadioxideMessage {
+            command: RadioCommand::SetFrequency(14_074_000),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let back: RadioxideMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.command, msg.command);
+    }
+
+    #[test]
+    fn response_json_roundtrip() {
+        let resp = RadioxideResponse {
+            success: true,
+            message: "OK".into(),
+            status: Some(RadioStatus::default()),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        let back: RadioxideResponse = serde_json::from_str(&json).unwrap();
+        assert!(back.success);
+        assert_eq!(back.status.unwrap().frequency_hz, 14_200_000);
+    }
+
+    #[test]
+    fn command_variants_serialize() {
+        let commands = vec![
+            RadioCommand::SetFrequency(7_074_000),
+            RadioCommand::GetFrequency,
+            RadioCommand::SetBand(Band::Band40m),
+            RadioCommand::GetBand,
+            RadioCommand::SetMode(Mode::CW),
+            RadioCommand::GetMode,
+            RadioCommand::Tune,
+            RadioCommand::PttOn,
+            RadioCommand::PttOff,
+            RadioCommand::SetPower(75),
+            RadioCommand::GetPower,
+            RadioCommand::SetVolume(30),
+            RadioCommand::GetVolume,
+            RadioCommand::SetAgc(Agc::Fast),
+            RadioCommand::GetAgc,
+            RadioCommand::GetStatus,
+        ];
+        for cmd in commands {
+            let json = serde_json::to_string(&cmd).unwrap();
+            let back: RadioCommand = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, cmd);
+        }
+    }
+}

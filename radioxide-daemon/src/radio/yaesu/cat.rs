@@ -243,4 +243,84 @@ mod tests {
         assert_eq!(c, '4');
         assert_eq!(cat_to_agc(c).unwrap(), Agc::Medium);
     }
+
+    #[test]
+    fn test_freq_to_band_all_bands() {
+        let cases = [
+            (1_900_000, Band::Band160m),
+            (3_700_000, Band::Band80m),
+            (5_350_000, Band::Band60m),
+            (7_100_000, Band::Band40m),
+            (10_120_000, Band::Band30m),
+            (14_200_000, Band::Band20m),
+            (18_100_000, Band::Band17m),
+            (21_200_000, Band::Band15m),
+            (24_950_000, Band::Band12m),
+            (28_500_000, Band::Band10m),
+            (50_100_000, Band::Band6m),
+            (146_000_000, Band::Band2m),
+            (435_000_000, Band::Band70cm),
+        ];
+        for (hz, expected) in cases {
+            assert_eq!(freq_to_band(hz), Some(expected), "wrong band for {hz} Hz");
+        }
+    }
+
+    #[test]
+    fn test_freq_to_band_unknown() {
+        assert_eq!(freq_to_band(500_000), None);
+        assert_eq!(freq_to_band(100_000_000), None);
+        assert_eq!(freq_to_band(0), None);
+    }
+
+    #[test]
+    fn test_mode_to_cat_all_modes() {
+        let expected = [
+            (Mode::LSB, '1'),
+            (Mode::USB, '2'),
+            (Mode::CW, '3'),
+            (Mode::FM, '4'),
+            (Mode::AM, '5'),
+            (Mode::Digital, '6'),
+            (Mode::CWR, '7'),
+            (Mode::DigitalR, '9'),
+        ];
+        for (mode, c) in expected {
+            assert_eq!(mode_to_cat(mode).unwrap(), c, "wrong CAT char for {mode:?}");
+        }
+    }
+
+    #[test]
+    fn test_cat_to_mode_all() {
+        let expected = [
+            ('1', Mode::LSB),
+            ('2', Mode::USB),
+            ('3', Mode::CW),
+            ('4', Mode::FM),
+            ('5', Mode::AM),
+            ('6', Mode::Digital),
+            ('7', Mode::CWR),
+            ('9', Mode::DigitalR),
+        ];
+        for (c, mode) in expected {
+            assert_eq!(cat_to_mode(c).unwrap(), mode, "wrong mode for CAT char '{c}'");
+        }
+        assert!(cat_to_mode('8').is_err());
+        assert!(cat_to_mode('0').is_err());
+    }
+
+    #[test]
+    fn test_agc_to_cat_all() {
+        assert_eq!(agc_to_cat(Agc::Off), '0');
+        assert_eq!(agc_to_cat(Agc::Fast), '1');
+        assert_eq!(agc_to_cat(Agc::Slow), '2');
+        assert_eq!(agc_to_cat(Agc::Medium), '4');
+    }
+
+    #[test]
+    fn test_band_to_cat_unsupported() {
+        assert!(band_to_cat(Band::Band60m).is_err());
+        assert!(band_to_cat(Band::Band2m).is_err());
+        assert!(band_to_cat(Band::Band70cm).is_err());
+    }
 }

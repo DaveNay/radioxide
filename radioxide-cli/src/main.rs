@@ -136,3 +136,108 @@ async fn main() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
+        let mut full = vec!["radioxide-cli"];
+        full.extend_from_slice(args);
+        Cli::try_parse_from(full)
+    }
+
+    #[test]
+    fn parse_freq() {
+        let cli = parse(&["freq", "14074000"]).unwrap();
+        assert!(matches!(cli.command, Command::Freq { hz: 14_074_000 }));
+    }
+
+    #[test]
+    fn parse_freq_out_of_range() {
+        assert!(parse(&["freq", "999999999"]).is_err());
+        assert!(parse(&["freq", "0"]).is_err());
+    }
+
+    #[test]
+    fn parse_band() {
+        let cli = parse(&["band", "20m"]).unwrap();
+        assert!(matches!(cli.command, Command::Band { ref band } if band == "20m"));
+    }
+
+    #[test]
+    fn parse_mode() {
+        let cli = parse(&["mode", "USB"]).unwrap();
+        assert!(matches!(cli.command, Command::Mode { ref mode } if mode == "USB"));
+    }
+
+    #[test]
+    fn parse_power() {
+        let cli = parse(&["power", "50"]).unwrap();
+        assert!(matches!(cli.command, Command::Power { pct: 50 }));
+    }
+
+    #[test]
+    fn parse_power_out_of_range() {
+        assert!(parse(&["power", "200"]).is_err());
+    }
+
+    #[test]
+    fn parse_volume() {
+        let cli = parse(&["volume", "30"]).unwrap();
+        assert!(matches!(cli.command, Command::Volume { pct: 30 }));
+    }
+
+    #[test]
+    fn parse_agc() {
+        let cli = parse(&["agc", "fast"]).unwrap();
+        assert!(matches!(cli.command, Command::Agc { ref setting } if setting == "fast"));
+    }
+
+    #[test]
+    fn parse_status() {
+        let cli = parse(&["status"]).unwrap();
+        assert!(matches!(cli.command, Command::Status));
+    }
+
+    #[test]
+    fn parse_tune() {
+        let cli = parse(&["tune"]).unwrap();
+        assert!(matches!(cli.command, Command::Tune));
+    }
+
+    #[test]
+    fn parse_ptt_on_off() {
+        let cli = parse(&["ptt-on"]).unwrap();
+        assert!(matches!(cli.command, Command::PttOn));
+        let cli = parse(&["ptt-off"]).unwrap();
+        assert!(matches!(cli.command, Command::PttOff));
+    }
+
+    #[test]
+    fn parse_custom_addr() {
+        let cli = parse(&["--addr", "10.0.0.1:8080", "status"]).unwrap();
+        assert_eq!(cli.addr, "10.0.0.1:8080");
+    }
+
+    #[test]
+    fn build_command_all_variants() {
+        assert_eq!(build_command(Command::Freq { hz: 7_074_000 }).unwrap(), RadioCommand::SetFrequency(7_074_000));
+        assert_eq!(build_command(Command::GetFreq).unwrap(), RadioCommand::GetFrequency);
+        assert_eq!(build_command(Command::Band { band: "20m".into() }).unwrap(), RadioCommand::SetBand(radioxide_proto::Band::Band20m));
+        assert_eq!(build_command(Command::GetBand).unwrap(), RadioCommand::GetBand);
+        assert_eq!(build_command(Command::Mode { mode: "USB".into() }).unwrap(), RadioCommand::SetMode(radioxide_proto::Mode::USB));
+        assert_eq!(build_command(Command::GetMode).unwrap(), RadioCommand::GetMode);
+        assert_eq!(build_command(Command::Tune).unwrap(), RadioCommand::Tune);
+        assert_eq!(build_command(Command::PttOn).unwrap(), RadioCommand::PttOn);
+        assert_eq!(build_command(Command::PttOff).unwrap(), RadioCommand::PttOff);
+        assert_eq!(build_command(Command::Power { pct: 75 }).unwrap(), RadioCommand::SetPower(75));
+        assert_eq!(build_command(Command::GetPower).unwrap(), RadioCommand::GetPower);
+        assert_eq!(build_command(Command::Volume { pct: 30 }).unwrap(), RadioCommand::SetVolume(30));
+        assert_eq!(build_command(Command::GetVolume).unwrap(), RadioCommand::GetVolume);
+        assert_eq!(build_command(Command::Agc { setting: "fast".into() }).unwrap(), RadioCommand::SetAgc(radioxide_proto::Agc::Fast));
+        assert_eq!(build_command(Command::GetAgc).unwrap(), RadioCommand::GetAgc);
+        assert_eq!(build_command(Command::Status).unwrap(), RadioCommand::GetStatus);
+    }
+}

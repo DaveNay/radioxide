@@ -173,7 +173,7 @@ async fn main() {
     info!("Radioxide daemon stopped.");
 }
 
-async fn dispatch(radio: Arc<dyn Radio>, msg: RadioxideMessage) -> RadioxideResponse {
+pub(crate) async fn dispatch(radio: Arc<dyn Radio>, msg: RadioxideMessage) -> RadioxideResponse {
     info!("Received: {:?}", msg.command);
 
     // GetStatus is handled separately to avoid a redundant second get_status() call.
@@ -225,5 +225,131 @@ async fn dispatch(radio: Arc<dyn Radio>, msg: RadioxideMessage) -> RadioxideResp
             message: format!("Error: {e}"),
             status: None,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use radioxide_proto::{Agc, Band, Mode, RadioCommand};
+
+    fn make_radio() -> Arc<dyn Radio> {
+        Arc::new(DummyRadio::new())
+    }
+
+    fn msg(command: RadioCommand) -> RadioxideMessage {
+        RadioxideMessage { command }
+    }
+
+    #[tokio::test]
+    async fn dispatch_get_status() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::GetStatus)).await;
+        assert!(resp.success);
+        let status = resp.status.unwrap();
+        assert_eq!(status.frequency_hz, 14_200_000);
+        assert_eq!(status.band, Band::Band20m);
+    }
+
+    #[tokio::test]
+    async fn dispatch_set_frequency() {
+        let radio = make_radio();
+        let resp = dispatch(radio.clone(), msg(RadioCommand::SetFrequency(7_074_000))).await;
+        assert!(resp.success);
+        assert!(resp.message.contains("Frequency set"));
+        assert_eq!(resp.status.unwrap().frequency_hz, 7_074_000);
+    }
+
+    #[tokio::test]
+    async fn dispatch_set_frequency_invalid() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::SetFrequency(0))).await;
+        assert!(!resp.success);
+    }
+
+    #[tokio::test]
+    async fn dispatch_set_band() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::SetBand(Band::Band40m))).await;
+        assert!(resp.success);
+        let status = resp.status.unwrap();
+        assert_eq!(status.band, Band::Band40m);
+        assert_eq!(status.frequency_hz, 7_074_000);
+    }
+
+    #[tokio::test]
+    async fn dispatch_set_mode() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::SetMode(Mode::CW))).await;
+        assert!(resp.success);
+        assert_eq!(resp.status.unwrap().mode, Mode::CW);
+    }
+
+    #[tokio::test]
+    async fn dispatch_set_power() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::SetPower(75))).await;
+        assert!(resp.success);
+        assert_eq!(resp.status.unwrap().power, 75);
+    }
+
+    #[tokio::test]
+    async fn dispatch_set_volume() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::SetVolume(30))).await;
+        assert!(resp.success);
+        assert_eq!(resp.status.unwrap().volume, 30);
+    }
+
+    #[tokio::test]
+    async fn dispatch_set_agc() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::SetAgc(Agc::Slow))).await;
+        assert!(resp.success);
+        assert_eq!(resp.status.unwrap().agc, Agc::Slow);
+    }
+
+    #[tokio::test]
+    async fn dispatch_get_frequency() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::GetFrequency)).await;
+        assert!(resp.success);
+        assert!(resp.message.contains("14200000"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_get_band() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::GetBand)).await;
+        assert!(resp.success);
+        assert!(resp.message.contains("20m"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_get_mode() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::GetMode)).await;
+        assert!(resp.success);
+        assert!(resp.message.contains("USB"));
+    }
+
+    #[tokio::test]
+    async fn dispatch_ptt_on_off() {
+        let radio = make_radio();
+        let resp = dispatch(radio.clone(), msg(RadioCommand::PttOn)).await;
+        assert!(resp.success);
+        assert!(resp.status.unwrap().ptt);
+
+        let resp = dispatch(radio, msg(RadioCommand::PttOff)).await;
+        assert!(resp.success);
+        assert!(!resp.status.unwrap().ptt);
+    }
+
+    #[tokio::test]
+    async fn dispatch_tune() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::Tune)).await;
+        assert!(resp.success);
+        assert!(resp.status.unwrap().tuning);
     }
 }

@@ -106,6 +106,24 @@ impl Radio for DummyRadio {
     }
 }
 
+fn default_frequency_for_band(band: Band) -> u64 {
+    match band {
+        Band::Band160m => 1_840_000,
+        Band::Band80m => 3_573_000,
+        Band::Band60m => 5_357_000,
+        Band::Band40m => 7_074_000,
+        Band::Band30m => 10_136_000,
+        Band::Band20m => 14_074_000,
+        Band::Band17m => 18_100_000,
+        Band::Band15m => 21_074_000,
+        Band::Band12m => 24_915_000,
+        Band::Band10m => 28_074_000,
+        Band::Band6m => 50_313_000,
+        Band::Band2m => 144_200_000,
+        Band::Band70cm => 432_200_000,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,22 +174,64 @@ mod tests {
         assert_eq!(status.frequency_hz, 21_074_000);
         assert_eq!(status.mode, Mode::USB);
     }
-}
 
-fn default_frequency_for_band(band: Band) -> u64 {
-    match band {
-        Band::Band160m => 1_840_000,
-        Band::Band80m => 3_573_000,
-        Band::Band60m => 5_357_000,
-        Band::Band40m => 7_074_000,
-        Band::Band30m => 10_136_000,
-        Band::Band20m => 14_074_000,
-        Band::Band17m => 18_100_000,
-        Band::Band15m => 21_074_000,
-        Band::Band12m => 24_915_000,
-        Band::Band10m => 28_074_000,
-        Band::Band6m => 50_313_000,
-        Band::Band2m => 144_200_000,
-        Band::Band70cm => 432_200_000,
+    #[tokio::test]
+    async fn test_frequency_out_of_range_low() {
+        let radio = DummyRadio::new();
+        assert!(radio.set_frequency(100).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_frequency_out_of_range_high() {
+        let radio = DummyRadio::new();
+        assert!(radio.set_frequency(100_000_000).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_volume_clamped() {
+        let radio = DummyRadio::new();
+        radio.set_volume(200).await.unwrap();
+        assert_eq!(radio.get_volume().await.unwrap(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_agc_roundtrip() {
+        let radio = DummyRadio::new();
+        for agc in [Agc::Off, Agc::Fast, Agc::Medium, Agc::Slow] {
+            radio.set_agc(agc).await.unwrap();
+            assert_eq!(radio.get_agc().await.unwrap(), agc);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_band_sets_correct_default_freqs() {
+        let radio = DummyRadio::new();
+        let expected = [
+            (Band::Band160m, 1_840_000),
+            (Band::Band80m, 3_573_000),
+            (Band::Band60m, 5_357_000),
+            (Band::Band40m, 7_074_000),
+            (Band::Band30m, 10_136_000),
+            (Band::Band20m, 14_074_000),
+            (Band::Band17m, 18_100_000),
+            (Band::Band15m, 21_074_000),
+            (Band::Band12m, 24_915_000),
+            (Band::Band10m, 28_074_000),
+            (Band::Band6m, 50_313_000),
+            (Band::Band2m, 144_200_000),
+            (Band::Band70cm, 432_200_000),
+        ];
+        for (band, freq) in expected {
+            radio.set_band(band).await.unwrap();
+            assert_eq!(radio.get_frequency().await.unwrap(), freq, "wrong default freq for {band}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_tune_sets_tuning_flag() {
+        let radio = DummyRadio::new();
+        radio.tune().await.unwrap();
+        let status = radio.get_status().await.unwrap();
+        assert!(status.tuning);
     }
 }

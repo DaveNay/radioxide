@@ -99,6 +99,131 @@ pub mod tcp {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::tcp;
+    use radioxide_proto::*;
+    use std::sync::atomic::{AtomicU16, Ordering};
+
+    static PORT_COUNTER: AtomicU16 = AtomicU16::new(17600);
+
+    fn next_addr() -> String {
+        let port = PORT_COUNTER.fetch_add(1, Ordering::Relaxed);
+        format!("127.0.0.1:{port}")
+    }
+
+    fn canned_handler() -> impl Fn(RadioxideMessage) -> std::pin::Pin<Box<dyn std::future::Future<Output = RadioxideResponse> + Send>> + Send + Sync + 'static {
+        move |msg: RadioxideMessage| {
+            Box::pin(async move {
+                let message = format!("handled: {:?}", msg.command);
+                RadioxideResponse {
+                    success: true,
+                    message,
+                    status: Some(RadioStatus::default()),
+                }
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn tcp_roundtrip() {
+        let addr = next_addr();
+        let server_addr = addr.clone();
+        tokio::spawn(async move {
+            let _ = tcp::start_server(&server_addr, canned_handler()).await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let msg = RadioxideMessage { command: RadioCommand::GetStatus };
+        let resp = tcp::send_message(&addr, &msg).await.unwrap();
+        assert!(resp.success);
+        assert!(resp.status.is_some());
+    }
+
+    #[tokio::test]
+    async fn tcp_set_frequency() {
+        let addr = next_addr();
+        let server_addr = addr.clone();
+        tokio::spawn(async move {
+            let _ = tcp::start_server(&server_addr, canned_handler()).await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let msg = RadioxideMessage { command: RadioCommand::SetFrequency(7_074_000) };
+        let resp = tcp::send_message(&addr, &msg).await.unwrap();
+        assert!(resp.success);
+        assert!(resp.message.contains("SetFrequency"));
+    }
+
+    #[tokio::test]
+    async fn tcp_multiple_commands() {
+        let addr = next_addr();
+        let server_addr = addr.clone();
+        tokio::spawn(async move {
+            let _ = tcp::start_server(&server_addr, canned_handler()).await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        for cmd in [RadioCommand::GetStatus, RadioCommand::GetFrequency, RadioCommand::GetBand] {
+            let msg = RadioxideMessage { command: cmd };
+            let resp = tcp::send_message(&addr, &msg).await.unwrap();
+            assert!(resp.success);
+        }
+    }
+
+    #[tokio::test]
+    async fn tcp_concurrent_clients() {
+        let addr = next_addr();
+        let server_addr = addr.clone();
+        tokio::spawn(async move {
+            let _ = tcp::start_server(&server_addr, canned_handler()).await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let addr1 = addr.clone();
+        let addr2 = addr.clone();
+        let (r1, r2) = tokio::join!(
+            async move {
+                let msg = RadioxideMessage { command: RadioCommand::GetStatus };
+                tcp::send_message(&addr1, &msg).await.unwrap()
+            },
+            async move {
+                let msg = RadioxideMessage { command: RadioCommand::GetFrequency };
+                tcp::send_message(&addr2, &msg).await.unwrap()
+            }
+        );
+        assert!(r1.success);
+        assert!(r2.success);
+    }
+
+    #[tokio::test]
+    async fn tcp_malformed_json() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpStream;
+
+        let addr = next_addr();
+        let server_addr = addr.clone();
+        tokio::spawn(async move {
+            let _ = tcp::start_server(&server_addr, canned_handler()).await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        let mut stream = TcpStream::connect(&addr).await.unwrap();
+        let garbage = b"not valid json at all";
+        stream.write_u32(garbage.len() as u32).await.unwrap();
+        stream.write_all(garbage).await.unwrap();
+        stream.flush().await.unwrap();
+
+        // Server should respond with an error, not crash
+        let len = stream.read_u32().await.unwrap() as usize;
+        let mut buf = vec![0u8; len];
+        stream.read_exact(&mut buf).await.unwrap();
+        let resp: RadioxideResponse = serde_json::from_slice(&buf).unwrap();
+        assert!(!resp.success);
+        assert!(resp.message.contains("Invalid message"));
+    }
+}
+
 #[cfg(target_os = "linux")]
 pub mod dbus {
     use super::*;
