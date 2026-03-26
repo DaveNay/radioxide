@@ -66,13 +66,13 @@ fn load_config() -> Config {
         info!("Using defaults. Create {} to configure.", path.display());
 
         // Create the config directory and write a default config
-        if let Some(parent) = path.parent() {
-            if std::fs::create_dir_all(parent).is_ok() {
-                let default = Config::default();
-                if let Ok(json) = serde_json::to_string_pretty(&default) {
-                    let _ = std::fs::write(&path, json);
-                    info!("Wrote default config to {}", path.display());
-                }
+        if let Some(parent) = path.parent()
+            && std::fs::create_dir_all(parent).is_ok()
+        {
+            let default = Config::default();
+            if let Ok(json) = serde_json::to_string_pretty(&default) {
+                let _ = std::fs::write(&path, json);
+                info!("Wrote default config to {}", path.display());
             }
         }
 
