@@ -146,11 +146,11 @@ The daemon reads `~/.config/radioxide/config.json`:
 
 ### Linux (Flatpak)
 
-A Flatpak manifest is included (`flatpak-manifest.json`) with app ID `com.radioxide.GUI`.
+A Flatpak manifest is included (`packaging/flatpak-manifest.json`) with app ID `com.radioxide.GUI`.
 
 ### Windows (NSIS)
 
-An NSIS installer script is included (`installer.nsi`). Build release binaries first, then compile with `makensis installer.nsi`.
+An NSIS installer script is included (`packaging/installer.nsi`). Build release binaries first, then run `makensis packaging\installer.nsi` from the repo root.
 
 ## Project Structure
 
@@ -181,8 +181,9 @@ radioxide/
     resources/
       fonts/                        JetBrains Mono Bold (OFL licensed)
       locales/en-US/radio.ftl       English UI strings
-  flatpak-manifest.json             Linux Flatpak packaging
-  installer.nsi                     Windows NSIS installer
+  packaging/
+    flatpak-manifest.json           Linux Flatpak packaging
+    installer.nsi                   Windows NSIS installer
 ```
 
 ## Adding a New Radio
