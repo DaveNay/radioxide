@@ -2,27 +2,24 @@
   <title>Radioxide</title>
 
   <!--
-    Concept: RF sine wave (ham radio) running left-to-right, with a Rust gear
-    centred on it. The gear sits on the signal like a component on a wire.
-    Holes in the gear are transparent (evenodd), revealing the wave behind.
+    Concept: RF sine wave (ham radio) enters from the left, passes through the
+    gear centre, and is hidden behind the gear on the right half. The Rust gear
+    sits on the signal like a component receiving it.
 
-    Wave: 3 full periods, period=80px, amplitude=22px, centre y=70.
-    Zero-crossings at x=0,40,80,120,160,200,240.
-    Gear centred at the x=120 zero-crossing.
+    Wave: 1.5 periods (x=0 to x=120), period=80px, amplitude=22px, centre y=70.
+    Zero-crossings at x=0,40,80,120. Gear centred at the x=120 zero-crossing,
+    so the wave terminates exactly at the gear centre, hidden under the right half.
 
     Gear: 8 teeth, outer r=40, inner r=28, hub r=9.
     Spoke holes r=4 at angles -90°/30°/150° on r=18 circle.
   -->
 
-  <!-- RF sine wave (drawn first, behind the gear) -->
+  <!-- RF sine wave in medium blue, drawn behind the gear, ending at gear centre -->
   <path d="M 0,70
            C 14.6,48 25.4,48 40,70
            C 54.6,92 65.4,92 80,70
-           C 94.6,48 105.4,48 120,70
-           C 134.6,92 145.4,92 160,70
-           C 174.6,48 185.4,48 200,70
-           C 214.6,92 225.4,92 240,70"
-        fill="none" stroke="#F74C00" stroke-width="3.5" stroke-linecap="round"/>
+           C 94.6,48 105.4,48 120,70"
+        fill="none" stroke="#3B82F6" stroke-width="3.5" stroke-linecap="round"/>
 
   <!--
     Gear centred at (120, 70), drawn on top of the wave.
