@@ -210,9 +210,12 @@ impl RadioxideGUI {
             .size(20)
             .color(FREQ_GREEN);
 
-        let band_mode = text(format!("{}  {}", self.status.band, self.status.mode))
-            .size(16)
-            .color(TEXT_DIM);
+        let band_mode = text(format!(
+            "VFO-{}  {}  {}",
+            self.status.vfo, self.status.band, self.status.mode
+        ))
+        .size(16)
+        .color(TEXT_DIM);
 
         let freq_display = row![
             freq_text,
