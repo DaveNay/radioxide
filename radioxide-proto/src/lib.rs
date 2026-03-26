@@ -307,7 +307,10 @@ mod tests {
 
     #[test]
     fn band_from_str() {
-        for s in ["160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m", "70cm"] {
+        for s in [
+            "160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "2m",
+            "70cm",
+        ] {
             let band: Band = s.parse().unwrap();
             assert_eq!(band.to_string().to_lowercase(), s.to_lowercase());
         }

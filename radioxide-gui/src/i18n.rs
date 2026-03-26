@@ -12,7 +12,8 @@ impl I18n {
         let locale = detect_locale();
         let ftl_source = select_locale(&locale);
 
-        let langid: LanguageIdentifier = locale.parse().unwrap_or_else(|_| "en-US".parse().unwrap());
+        let langid: LanguageIdentifier =
+            locale.parse().unwrap_or_else(|_| "en-US".parse().unwrap());
         let resource =
             FluentResource::try_new(ftl_source.to_string()).expect("failed to parse FTL resource");
 

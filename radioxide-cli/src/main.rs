@@ -1,9 +1,12 @@
 use clap::{Parser, Subcommand};
-use radioxide_proto::{RadioCommand, RadioxideMessage, Vfo, DEFAULT_ADDR};
+use radioxide_proto::{DEFAULT_ADDR, RadioCommand, RadioxideMessage, Vfo};
 use radioxide_transports::tcp;
 
 #[derive(Parser)]
-#[command(name = "radioxide-cli", about = "Command-line client for the Radioxide radio daemon")]
+#[command(
+    name = "radioxide-cli",
+    about = "Command-line client for the Radioxide radio daemon"
+)]
 struct Cli {
     /// Daemon address
     #[arg(short, long, default_value = DEFAULT_ADDR, global = true)]
@@ -126,9 +129,7 @@ async fn main() {
         }
     };
 
-    let msg = RadioxideMessage {
-        command: radio_cmd,
-    };
+    let msg = RadioxideMessage { command: radio_cmd };
 
     match tcp::send_message(&cli.addr, &msg).await {
         Ok(resp) => {
@@ -233,25 +234,79 @@ mod tests {
 
     #[test]
     fn build_command_all_variants() {
-        assert_eq!(build_command(Command::Freq { hz: 7_074_000 }).unwrap(), RadioCommand::SetFrequency(7_074_000));
-        assert_eq!(build_command(Command::GetFreq).unwrap(), RadioCommand::GetFrequency);
-        assert_eq!(build_command(Command::Band { band: "20m".into() }).unwrap(), RadioCommand::SetBand(radioxide_proto::Band::Band20m));
-        assert_eq!(build_command(Command::GetBand).unwrap(), RadioCommand::GetBand);
-        assert_eq!(build_command(Command::Mode { mode: "USB".into() }).unwrap(), RadioCommand::SetMode(radioxide_proto::Mode::USB));
-        assert_eq!(build_command(Command::GetMode).unwrap(), RadioCommand::GetMode);
+        assert_eq!(
+            build_command(Command::Freq { hz: 7_074_000 }).unwrap(),
+            RadioCommand::SetFrequency(7_074_000)
+        );
+        assert_eq!(
+            build_command(Command::GetFreq).unwrap(),
+            RadioCommand::GetFrequency
+        );
+        assert_eq!(
+            build_command(Command::Band { band: "20m".into() }).unwrap(),
+            RadioCommand::SetBand(radioxide_proto::Band::Band20m)
+        );
+        assert_eq!(
+            build_command(Command::GetBand).unwrap(),
+            RadioCommand::GetBand
+        );
+        assert_eq!(
+            build_command(Command::Mode { mode: "USB".into() }).unwrap(),
+            RadioCommand::SetMode(radioxide_proto::Mode::USB)
+        );
+        assert_eq!(
+            build_command(Command::GetMode).unwrap(),
+            RadioCommand::GetMode
+        );
         assert_eq!(build_command(Command::Tune).unwrap(), RadioCommand::Tune);
         assert_eq!(build_command(Command::PttOn).unwrap(), RadioCommand::PttOn);
-        assert_eq!(build_command(Command::PttOff).unwrap(), RadioCommand::PttOff);
-        assert_eq!(build_command(Command::Power { pct: 75 }).unwrap(), RadioCommand::SetPower(75));
-        assert_eq!(build_command(Command::GetPower).unwrap(), RadioCommand::GetPower);
-        assert_eq!(build_command(Command::Volume { pct: 30 }).unwrap(), RadioCommand::SetVolume(30));
-        assert_eq!(build_command(Command::GetVolume).unwrap(), RadioCommand::GetVolume);
-        assert_eq!(build_command(Command::Agc { setting: "fast".into() }).unwrap(), RadioCommand::SetAgc(radioxide_proto::Agc::Fast));
-        assert_eq!(build_command(Command::GetAgc).unwrap(), RadioCommand::GetAgc);
-        assert_eq!(build_command(Command::Vfo { vfo: "A".into() }).unwrap(), RadioCommand::SetVfo(Vfo::A));
-        assert_eq!(build_command(Command::Vfo { vfo: "B".into() }).unwrap(), RadioCommand::SetVfo(Vfo::B));
-        assert_eq!(build_command(Command::GetVfo).unwrap(), RadioCommand::GetVfo);
-        assert_eq!(build_command(Command::Status).unwrap(), RadioCommand::GetStatus);
+        assert_eq!(
+            build_command(Command::PttOff).unwrap(),
+            RadioCommand::PttOff
+        );
+        assert_eq!(
+            build_command(Command::Power { pct: 75 }).unwrap(),
+            RadioCommand::SetPower(75)
+        );
+        assert_eq!(
+            build_command(Command::GetPower).unwrap(),
+            RadioCommand::GetPower
+        );
+        assert_eq!(
+            build_command(Command::Volume { pct: 30 }).unwrap(),
+            RadioCommand::SetVolume(30)
+        );
+        assert_eq!(
+            build_command(Command::GetVolume).unwrap(),
+            RadioCommand::GetVolume
+        );
+        assert_eq!(
+            build_command(Command::Agc {
+                setting: "fast".into()
+            })
+            .unwrap(),
+            RadioCommand::SetAgc(radioxide_proto::Agc::Fast)
+        );
+        assert_eq!(
+            build_command(Command::GetAgc).unwrap(),
+            RadioCommand::GetAgc
+        );
+        assert_eq!(
+            build_command(Command::Vfo { vfo: "A".into() }).unwrap(),
+            RadioCommand::SetVfo(Vfo::A)
+        );
+        assert_eq!(
+            build_command(Command::Vfo { vfo: "B".into() }).unwrap(),
+            RadioCommand::SetVfo(Vfo::B)
+        );
+        assert_eq!(
+            build_command(Command::GetVfo).unwrap(),
+            RadioCommand::GetVfo
+        );
+        assert_eq!(
+            build_command(Command::Status).unwrap(),
+            RadioCommand::GetStatus
+        );
     }
 
     #[test]

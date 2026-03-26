@@ -16,7 +16,11 @@ struct DummyState {
 impl DummyState {
     fn new() -> Self {
         let status = RadioStatus::default();
-        Self { freq_a: status.frequency_hz, freq_b: status.frequency_hz, status }
+        Self {
+            freq_a: status.frequency_hz,
+            freq_b: status.frequency_hz,
+            status,
+        }
     }
 
     /// Return the stored frequency for the given VFO.
@@ -273,7 +277,11 @@ mod tests {
         ];
         for (band, freq) in expected {
             radio.set_band(band).await.unwrap();
-            assert_eq!(radio.get_frequency().await.unwrap(), freq, "wrong default freq for {band}");
+            assert_eq!(
+                radio.get_frequency().await.unwrap(),
+                freq,
+                "wrong default freq for {band}"
+            );
         }
     }
 

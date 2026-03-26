@@ -1,8 +1,8 @@
 //! End-to-end integration tests: start a TCP server with DummyRadio,
 //! send commands via tcp::send_message, and verify responses.
 
-use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU16, Ordering};
 
 use radioxide_proto::*;
 use radioxide_transports::tcp;
@@ -132,7 +132,9 @@ fn msg(command: RadioCommand) -> RadioxideMessage {
 #[tokio::test]
 async fn e2e_get_status() {
     let addr = start_test_server().await;
-    let resp = tcp::send_message(&addr, &msg(RadioCommand::GetStatus)).await.unwrap();
+    let resp = tcp::send_message(&addr, &msg(RadioCommand::GetStatus))
+        .await
+        .unwrap();
     assert!(resp.success);
     let status = resp.status.unwrap();
     assert_eq!(status.frequency_hz, 14_200_000);
@@ -174,13 +176,25 @@ async fn e2e_set_band_updates_frequency() {
 async fn e2e_full_workflow() {
     let addr = start_test_server().await;
 
-    tcp::send_message(&addr, &msg(RadioCommand::SetFrequency(21_074_000))).await.unwrap();
-    tcp::send_message(&addr, &msg(RadioCommand::SetMode(Mode::CW))).await.unwrap();
-    tcp::send_message(&addr, &msg(RadioCommand::SetPower(75))).await.unwrap();
-    tcp::send_message(&addr, &msg(RadioCommand::SetVolume(30))).await.unwrap();
-    tcp::send_message(&addr, &msg(RadioCommand::SetAgc(Agc::Fast))).await.unwrap();
+    tcp::send_message(&addr, &msg(RadioCommand::SetFrequency(21_074_000)))
+        .await
+        .unwrap();
+    tcp::send_message(&addr, &msg(RadioCommand::SetMode(Mode::CW)))
+        .await
+        .unwrap();
+    tcp::send_message(&addr, &msg(RadioCommand::SetPower(75)))
+        .await
+        .unwrap();
+    tcp::send_message(&addr, &msg(RadioCommand::SetVolume(30)))
+        .await
+        .unwrap();
+    tcp::send_message(&addr, &msg(RadioCommand::SetAgc(Agc::Fast)))
+        .await
+        .unwrap();
 
-    let resp = tcp::send_message(&addr, &msg(RadioCommand::GetStatus)).await.unwrap();
+    let resp = tcp::send_message(&addr, &msg(RadioCommand::GetStatus))
+        .await
+        .unwrap();
     let status = resp.status.unwrap();
     assert_eq!(status.frequency_hz, 21_074_000);
     assert_eq!(status.mode, Mode::CW);
@@ -193,9 +207,13 @@ async fn e2e_full_workflow() {
 async fn e2e_ptt_toggle() {
     let addr = start_test_server().await;
 
-    let resp = tcp::send_message(&addr, &msg(RadioCommand::PttOn)).await.unwrap();
+    let resp = tcp::send_message(&addr, &msg(RadioCommand::PttOn))
+        .await
+        .unwrap();
     assert!(resp.status.unwrap().ptt);
 
-    let resp = tcp::send_message(&addr, &msg(RadioCommand::PttOff)).await.unwrap();
+    let resp = tcp::send_message(&addr, &msg(RadioCommand::PttOff))
+        .await
+        .unwrap();
     assert!(!resp.status.unwrap().ptt);
 }

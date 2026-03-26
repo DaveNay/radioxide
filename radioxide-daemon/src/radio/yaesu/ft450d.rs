@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use radioxide_proto::{Agc, Band, Mode, RadioStatus, Vfo};
 
 use super::cat::{
-    agc_to_cat, band_to_cat, cat_to_agc, cat_to_mode, cat_to_vfo, freq_to_band, mode_to_cat,
-    vfo_to_cat, CatCommand,
+    CatCommand, agc_to_cat, band_to_cat, cat_to_agc, cat_to_mode, cat_to_vfo, freq_to_band,
+    mode_to_cat, vfo_to_cat,
 };
 use super::serial::{CatPort, SerialConfig};
 use crate::radio::{BackendError, Radio, Result};
@@ -47,9 +47,8 @@ impl Radio for Ft450d {
 
     async fn get_band(&self) -> Result<Band> {
         let hz = self.get_frequency().await?;
-        freq_to_band(hz).ok_or_else(|| {
-            BackendError::Protocol(format!("cannot determine band for {hz} Hz"))
-        })
+        freq_to_band(hz)
+            .ok_or_else(|| BackendError::Protocol(format!("cannot determine band for {hz} Hz")))
     }
 
     async fn set_mode(&self, mode: Mode) -> Result<()> {
@@ -62,11 +61,10 @@ impl Radio for Ft450d {
     async fn get_mode(&self) -> Result<Mode> {
         let resp = self.port.execute(&CatCommand::read("MD")).await?;
         // Response body: "0{P2}"
-        let p2 = resp
-            .body
-            .chars()
-            .nth(1)
-            .ok_or_else(|| BackendError::Protocol(format!("short MD response: {:?}", resp.body)))?;
+        let p2 =
+            resp.body.chars().nth(1).ok_or_else(|| {
+                BackendError::Protocol(format!("short MD response: {:?}", resp.body))
+            })?;
         cat_to_mode(p2)
     }
 
@@ -131,11 +129,10 @@ impl Radio for Ft450d {
 
     async fn get_agc(&self) -> Result<Agc> {
         let resp = self.port.execute(&CatCommand::read("GT")).await?;
-        let p2 = resp
-            .body
-            .chars()
-            .nth(1)
-            .ok_or_else(|| BackendError::Protocol(format!("short GT response: {:?}", resp.body)))?;
+        let p2 =
+            resp.body.chars().nth(1).ok_or_else(|| {
+                BackendError::Protocol(format!("short GT response: {:?}", resp.body))
+            })?;
         cat_to_agc(p2)
     }
 

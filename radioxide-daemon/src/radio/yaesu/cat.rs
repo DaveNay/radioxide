@@ -323,7 +323,11 @@ mod tests {
             ('9', Mode::DigitalR),
         ];
         for (c, mode) in expected {
-            assert_eq!(cat_to_mode(c).unwrap(), mode, "wrong mode for CAT char '{c}'");
+            assert_eq!(
+                cat_to_mode(c).unwrap(),
+                mode,
+                "wrong mode for CAT char '{c}'"
+            );
         }
         assert!(cat_to_mode('8').is_err());
         assert!(cat_to_mode('0').is_err());

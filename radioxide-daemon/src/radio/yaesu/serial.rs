@@ -62,7 +62,10 @@ impl CatPort {
     }
 
     /// Attempt to reconnect the serial port. Returns the new stream or an error.
-    async fn reconnect(&self, guard: &mut Option<tokio_serial::SerialStream>) -> crate::radio::Result<()> {
+    async fn reconnect(
+        &self,
+        guard: &mut Option<tokio_serial::SerialStream>,
+    ) -> crate::radio::Result<()> {
         for attempt in 1..=MAX_RECONNECT_ATTEMPTS {
             warn!(
                 "Serial connection lost, reconnect attempt {}/{}...",
@@ -121,8 +124,8 @@ impl CatPort {
         port.flush().await?;
 
         let raw = read_until_semicolon(port).await?;
-        let response_str =
-            String::from_utf8(raw).map_err(|e| BackendError::Protocol(format!("invalid UTF-8: {e}")))?;
+        let response_str = String::from_utf8(raw)
+            .map_err(|e| BackendError::Protocol(format!("invalid UTF-8: {e}")))?;
 
         CatResponse::parse(&response_str, cmd.verb())
     }

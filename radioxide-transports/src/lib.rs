@@ -86,8 +86,8 @@ pub mod tcp {
         msg: &RadioxideMessage,
     ) -> tokio::io::Result<RadioxideResponse> {
         let mut stream = TcpStream::connect(addr).await?;
-        let serialized =
-            serde_json::to_vec(msg).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let serialized = serde_json::to_vec(msg)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         write_frame(&mut stream, &serialized).await?;
 
         let frame = read_frame(&mut stream)
@@ -112,7 +112,13 @@ mod tests {
         format!("127.0.0.1:{port}")
     }
 
-    fn canned_handler() -> impl Fn(RadioxideMessage) -> std::pin::Pin<Box<dyn std::future::Future<Output = RadioxideResponse> + Send>> + Send + Sync + 'static {
+    fn canned_handler() -> impl Fn(
+        RadioxideMessage,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = RadioxideResponse> + Send>,
+    > + Send
+    + Sync
+    + 'static {
         move |msg: RadioxideMessage| {
             Box::pin(async move {
                 let message = format!("handled: {:?}", msg.command);
@@ -134,7 +140,9 @@ mod tests {
         });
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-        let msg = RadioxideMessage { command: RadioCommand::GetStatus };
+        let msg = RadioxideMessage {
+            command: RadioCommand::GetStatus,
+        };
         let resp = tcp::send_message(&addr, &msg).await.unwrap();
         assert!(resp.success);
         assert!(resp.status.is_some());
@@ -149,7 +157,9 @@ mod tests {
         });
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-        let msg = RadioxideMessage { command: RadioCommand::SetFrequency(7_074_000) };
+        let msg = RadioxideMessage {
+            command: RadioCommand::SetFrequency(7_074_000),
+        };
         let resp = tcp::send_message(&addr, &msg).await.unwrap();
         assert!(resp.success);
         assert!(resp.message.contains("SetFrequency"));
@@ -164,7 +174,11 @@ mod tests {
         });
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-        for cmd in [RadioCommand::GetStatus, RadioCommand::GetFrequency, RadioCommand::GetBand] {
+        for cmd in [
+            RadioCommand::GetStatus,
+            RadioCommand::GetFrequency,
+            RadioCommand::GetBand,
+        ] {
             let msg = RadioxideMessage { command: cmd };
             let resp = tcp::send_message(&addr, &msg).await.unwrap();
             assert!(resp.success);
@@ -184,11 +198,15 @@ mod tests {
         let addr2 = addr.clone();
         let (r1, r2) = tokio::join!(
             async move {
-                let msg = RadioxideMessage { command: RadioCommand::GetStatus };
+                let msg = RadioxideMessage {
+                    command: RadioCommand::GetStatus,
+                };
                 tcp::send_message(&addr1, &msg).await.unwrap()
             },
             async move {
-                let msg = RadioxideMessage { command: RadioCommand::GetFrequency };
+                let msg = RadioxideMessage {
+                    command: RadioCommand::GetFrequency,
+                };
                 tcp::send_message(&addr2, &msg).await.unwrap()
             }
         );
@@ -231,9 +249,9 @@ pub mod dbus {
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::Arc;
+    use zbus::ConnectionBuilder;
     use zbus::dbus_interface;
     use zbus::fdo;
-    use zbus::ConnectionBuilder;
 
     type Handler = Arc<
         dyn Fn(RadioxideMessage) -> Pin<Box<dyn Future<Output = RadioxideResponse> + Send>>

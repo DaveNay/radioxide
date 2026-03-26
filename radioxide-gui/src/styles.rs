@@ -118,13 +118,13 @@ pub fn tune_button(is_tuning: bool) -> impl Fn(&Theme, button::Status) -> button
 
         button::Style {
             background: Some(Background::Color(bg)),
-            text_color: if is_tuning { Color::BLACK } else { TEXT_PRIMARY },
+            text_color: if is_tuning {
+                Color::BLACK
+            } else {
+                TEXT_PRIMARY
+            },
             border: Border {
-                color: if is_tuning {
-                    TUNE_AMBER
-                } else {
-                    PANEL_BORDER
-                },
+                color: if is_tuning { TUNE_AMBER } else { PANEL_BORDER },
                 width: 1.0,
                 radius: 4.0.into(),
             },

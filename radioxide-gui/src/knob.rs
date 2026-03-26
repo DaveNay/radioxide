@@ -67,7 +67,10 @@ impl canvas::Program<KnobMessage> for TuningKnobProgram {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> (canvas::event::Status, Option<KnobMessage>) {
-        let center = Point::new(bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
+        let center = Point::new(
+            bounds.x + bounds.width / 2.0,
+            bounds.y + bounds.height / 2.0,
+        );
 
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
@@ -283,7 +286,7 @@ impl canvas::Program<KnobMessage> for TuningKnobProgram {
 
 pub fn view_knob() -> Element<'static, KnobMessage> {
     Canvas::new(TuningKnobProgram)
-    .width(Length::Fixed(KNOB_SIZE))
-    .height(Length::Fixed(KNOB_SIZE))
-    .into()
+        .width(Length::Fixed(KNOB_SIZE))
+        .height(Length::Fixed(KNOB_SIZE))
+        .into()
 }

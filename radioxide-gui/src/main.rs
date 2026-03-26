@@ -4,10 +4,11 @@ mod styles;
 mod theme;
 mod widgets;
 
-use iced::widget::{button, column, container, row, slider, text, text_input, Space};
+use iced::widget::{Space, button, column, container, row, slider, text, text_input};
 use iced::{Element, Font, Length, Task};
 use radioxide_proto::{
-    Agc, Band, Mode, RadioCommand, RadioStatus, RadioxideMessage, RadioxideResponse, Vfo, DEFAULT_ADDR,
+    Agc, Band, DEFAULT_ADDR, Mode, RadioCommand, RadioStatus, RadioxideMessage, RadioxideResponse,
+    Vfo,
 };
 use radioxide_transports::tcp;
 
@@ -160,9 +161,13 @@ impl RadioxideGUI {
             row![self.view_band_panel(), self.view_mode_panel(),]
                 .spacing(8)
                 .width(Length::Fill),
-            row![self.view_vfo_panel(), self.view_agc_panel(), self.view_controls_panel(),]
-                .spacing(8)
-                .width(Length::Fill),
+            row![
+                self.view_vfo_panel(),
+                self.view_agc_panel(),
+                self.view_controls_panel(),
+            ]
+            .spacing(8)
+            .width(Length::Fill),
             self.view_sliders_panel(),
             self.view_status_bar(),
         ]
@@ -180,9 +185,7 @@ impl RadioxideGUI {
         let led_color = if self.connected { LED_GREEN } else { LED_RED };
         let led = text("●").size(14).color(led_color);
 
-        let title = text(self.i18n.t("app-title"))
-            .size(16)
-            .color(TEXT_PRIMARY);
+        let title = text(self.i18n.t("app-title")).size(16).color(TEXT_PRIMARY);
 
         let refresh_btn = button(text(self.i18n.t("refresh")).size(12))
             .on_press(Message::RefreshStatus)
@@ -211,9 +214,14 @@ impl RadioxideGUI {
             .size(16)
             .color(TEXT_DIM);
 
-        let freq_display = row![freq_text, hz_label, Space::with_width(Length::Fill), band_mode,]
-            .spacing(8)
-            .align_y(iced::Alignment::End);
+        let freq_display = row![
+            freq_text,
+            hz_label,
+            Space::with_width(Length::Fill),
+            band_mode,
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::End);
 
         let freq_input = text_input(&self.i18n.t("freq-placeholder"), &self.freq_input)
             .on_input(Message::FreqInputChanged)
@@ -263,11 +271,10 @@ impl RadioxideGUI {
     }
 
     fn view_band_panel(&self) -> Element<'_, Message> {
-        let label = text(self.i18n.t("band-label"))
-            .size(11)
-            .color(TEXT_DIM);
+        let label = text(self.i18n.t("band-label")).size(11).color(TEXT_DIM);
 
-        let buttons = widgets::toggle_button_row(&ALL_BANDS, self.status.band, Message::BandSelected, 5);
+        let buttons =
+            widgets::toggle_button_row(&ALL_BANDS, self.status.band, Message::BandSelected, 5);
 
         container(column![label, buttons].spacing(6).padding(10))
             .width(Length::Fill)
@@ -276,11 +283,10 @@ impl RadioxideGUI {
     }
 
     fn view_mode_panel(&self) -> Element<'_, Message> {
-        let label = text(self.i18n.t("mode-label"))
-            .size(11)
-            .color(TEXT_DIM);
+        let label = text(self.i18n.t("mode-label")).size(11).color(TEXT_DIM);
 
-        let buttons = widgets::toggle_button_row(&ALL_MODES, self.status.mode, Message::ModeSelected, 4);
+        let buttons =
+            widgets::toggle_button_row(&ALL_MODES, self.status.mode, Message::ModeSelected, 4);
 
         container(column![label, buttons].spacing(6).padding(10))
             .width(Length::Fill)
@@ -289,11 +295,10 @@ impl RadioxideGUI {
     }
 
     fn view_agc_panel(&self) -> Element<'_, Message> {
-        let label = text(self.i18n.t("agc-label"))
-            .size(11)
-            .color(TEXT_DIM);
+        let label = text(self.i18n.t("agc-label")).size(11).color(TEXT_DIM);
 
-        let buttons = widgets::toggle_button_row(&ALL_AGC, self.status.agc, Message::AgcSelected, 4);
+        let buttons =
+            widgets::toggle_button_row(&ALL_AGC, self.status.agc, Message::AgcSelected, 4);
 
         container(column![label, buttons].spacing(6).padding(10))
             .width(Length::Fill)
@@ -302,11 +307,10 @@ impl RadioxideGUI {
     }
 
     fn view_vfo_panel(&self) -> Element<'_, Message> {
-        let label = text(self.i18n.t("vfo-label"))
-            .size(11)
-            .color(TEXT_DIM);
+        let label = text(self.i18n.t("vfo-label")).size(11).color(TEXT_DIM);
 
-        let buttons = widgets::toggle_button_row(&ALL_VFOS, self.status.vfo, Message::VfoSelected, 2);
+        let buttons =
+            widgets::toggle_button_row(&ALL_VFOS, self.status.vfo, Message::VfoSelected, 2);
 
         container(column![label, buttons].spacing(6).padding(10))
             .width(Length::Fill)
@@ -315,9 +319,7 @@ impl RadioxideGUI {
     }
 
     fn view_controls_panel(&self) -> Element<'_, Message> {
-        let label = text(self.i18n.t("controls-label"))
-            .size(11)
-            .color(TEXT_DIM);
+        let label = text(self.i18n.t("controls-label")).size(11).color(TEXT_DIM);
 
         let tune_btn = button(text(self.i18n.t("tune")).size(14))
             .on_press(Message::TunePressed)
@@ -345,17 +347,27 @@ impl RadioxideGUI {
     }
 
     fn view_sliders_panel(&self) -> Element<'_, Message> {
-        let power_label = text(format!("{} {}%", self.i18n.t("power-label"), self.status.power))
-            .size(13)
-            .color(TEXT_DIM);
+        let power_label = text(format!(
+            "{} {}%",
+            self.i18n.t("power-label"),
+            self.status.power
+        ))
+        .size(13)
+        .color(TEXT_DIM);
 
-        let power_slider = slider(0..=100, self.status.power, Message::PowerChanged).style(radio_slider);
+        let power_slider =
+            slider(0..=100, self.status.power, Message::PowerChanged).style(radio_slider);
 
-        let vol_label = text(format!("{} {}%", self.i18n.t("volume-label"), self.status.volume))
-            .size(13)
-            .color(TEXT_DIM);
+        let vol_label = text(format!(
+            "{} {}%",
+            self.i18n.t("volume-label"),
+            self.status.volume
+        ))
+        .size(13)
+        .color(TEXT_DIM);
 
-        let vol_slider = slider(0..=100, self.status.volume, Message::VolumeChanged).style(radio_slider);
+        let vol_slider =
+            slider(0..=100, self.status.volume, Message::VolumeChanged).style(radio_slider);
 
         container(
             row![
