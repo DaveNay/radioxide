@@ -165,6 +165,34 @@ impl std::str::FromStr for Agc {
     }
 }
 
+/// VFO (Variable Frequency Oscillator) selector.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Vfo {
+    A,
+    B,
+}
+
+impl std::fmt::Display for Vfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Vfo::A => write!(f, "A"),
+            Vfo::B => write!(f, "B"),
+        }
+    }
+}
+
+impl std::str::FromStr for Vfo {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_uppercase().as_str() {
+            "A" => Ok(Vfo::A),
+            "B" => Ok(Vfo::B),
+            other => Err(format!("unknown VFO: {other}")),
+        }
+    }
+}
+
 /// Command sent from a client to the daemon.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum RadioCommand {
@@ -198,6 +226,10 @@ pub enum RadioCommand {
     SetAgc(Agc),
     /// Get current AGC mode.
     GetAgc,
+    /// Select active VFO.
+    SetVfo(Vfo),
+    /// Get active VFO.
+    GetVfo,
     /// Request full radio status.
     GetStatus,
 }
@@ -211,6 +243,7 @@ pub struct RadioStatus {
     pub power: u8,
     pub volume: u8,
     pub agc: Agc,
+    pub vfo: Vfo,
     pub ptt: bool,
     pub tuning: bool,
 }
@@ -224,6 +257,7 @@ impl Default for RadioStatus {
             power: 50,
             volume: 50,
             agc: Agc::Medium,
+            vfo: Vfo::A,
             ptt: false,
             tuning: false,
         }
@@ -411,6 +445,9 @@ mod tests {
             RadioCommand::GetVolume,
             RadioCommand::SetAgc(Agc::Fast),
             RadioCommand::GetAgc,
+            RadioCommand::SetVfo(Vfo::A),
+            RadioCommand::SetVfo(Vfo::B),
+            RadioCommand::GetVfo,
             RadioCommand::GetStatus,
         ];
         for cmd in commands {
@@ -418,5 +455,27 @@ mod tests {
             let back: RadioCommand = serde_json::from_str(&json).unwrap();
             assert_eq!(back, cmd);
         }
+    }
+
+    #[test]
+    fn vfo_display() {
+        assert_eq!(Vfo::A.to_string(), "A");
+        assert_eq!(Vfo::B.to_string(), "B");
+    }
+
+    #[test]
+    fn vfo_from_str() {
+        assert_eq!("A".parse::<Vfo>().unwrap(), Vfo::A);
+        assert_eq!("B".parse::<Vfo>().unwrap(), Vfo::B);
+        assert_eq!("a".parse::<Vfo>().unwrap(), Vfo::A);
+        assert_eq!("b".parse::<Vfo>().unwrap(), Vfo::B);
+        assert!("C".parse::<Vfo>().is_err());
+        assert!("".parse::<Vfo>().is_err());
+    }
+
+    #[test]
+    fn radio_status_default_vfo() {
+        let status = RadioStatus::default();
+        assert_eq!(status.vfo, Vfo::A);
     }
 }

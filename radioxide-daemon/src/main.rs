@@ -208,6 +208,8 @@ pub(crate) async fn dispatch(radio: Arc<dyn Radio>, msg: RadioxideMessage) -> Ra
         RadioCommand::GetVolume => radio.get_volume().await.map(|v| format!("Volume: {v}%")),
         RadioCommand::SetAgc(agc) => radio.set_agc(agc).await.map(|_| format!("AGC set to {agc}")),
         RadioCommand::GetAgc => radio.get_agc().await.map(|a| format!("AGC: {a}")),
+        RadioCommand::SetVfo(vfo) => radio.set_vfo(vfo).await.map(|_| format!("VFO {vfo} selected")),
+        RadioCommand::GetVfo => radio.get_vfo().await.map(|v| format!("VFO: {v}")),
         RadioCommand::GetStatus => unreachable!(),
     };
 
@@ -231,7 +233,7 @@ pub(crate) async fn dispatch(radio: Arc<dyn Radio>, msg: RadioxideMessage) -> Ra
 #[cfg(test)]
 mod tests {
     use super::*;
-    use radioxide_proto::{Agc, Band, Mode, RadioCommand};
+    use radioxide_proto::{Agc, Band, Mode, RadioCommand, Vfo};
 
     fn make_radio() -> Arc<dyn Radio> {
         Arc::new(DummyRadio::new())
@@ -351,5 +353,26 @@ mod tests {
         let resp = dispatch(radio, msg(RadioCommand::Tune)).await;
         assert!(resp.success);
         assert!(resp.status.unwrap().tuning);
+    }
+
+    #[tokio::test]
+    async fn dispatch_set_vfo() {
+        let radio = make_radio();
+        let resp = dispatch(radio.clone(), msg(RadioCommand::SetVfo(Vfo::B))).await;
+        assert!(resp.success);
+        assert!(resp.message.contains("VFO B"));
+        assert_eq!(resp.status.unwrap().vfo, Vfo::B);
+
+        let resp = dispatch(radio, msg(RadioCommand::SetVfo(Vfo::A))).await;
+        assert!(resp.success);
+        assert_eq!(resp.status.unwrap().vfo, Vfo::A);
+    }
+
+    #[tokio::test]
+    async fn dispatch_get_vfo() {
+        let radio = make_radio();
+        let resp = dispatch(radio, msg(RadioCommand::GetVfo)).await;
+        assert!(resp.success);
+        assert!(resp.message.contains("VFO: A"));
     }
 }

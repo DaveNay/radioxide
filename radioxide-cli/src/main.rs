@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use radioxide_proto::{RadioCommand, RadioxideMessage, DEFAULT_ADDR};
+use radioxide_proto::{RadioCommand, RadioxideMessage, Vfo, DEFAULT_ADDR};
 use radioxide_transports::tcp;
 
 #[derive(Parser)]
@@ -66,6 +66,13 @@ enum Command {
     },
     /// Get current AGC mode
     GetAgc,
+    /// Select active VFO (A or B)
+    Vfo {
+        /// VFO to select (A or B)
+        vfo: String,
+    },
+    /// Get active VFO
+    GetVfo,
     /// Get full radio status
     Status,
 }
@@ -87,6 +94,8 @@ fn build_command(cmd: Command) -> Result<RadioCommand, String> {
         Command::GetVolume => Ok(RadioCommand::GetVolume),
         Command::Agc { setting } => Ok(RadioCommand::SetAgc(setting.parse()?)),
         Command::GetAgc => Ok(RadioCommand::GetAgc),
+        Command::Vfo { vfo } => Ok(RadioCommand::SetVfo(vfo.parse::<Vfo>()?)),
+        Command::GetVfo => Ok(RadioCommand::GetVfo),
         Command::Status => Ok(RadioCommand::GetStatus),
     }
 }
@@ -99,6 +108,7 @@ fn print_status(resp: &radioxide_proto::RadioxideResponse) {
         println!("  Power:     {}%", st.power);
         println!("  Volume:    {}%", st.volume);
         println!("  AGC:       {}", st.agc);
+        println!("  VFO:       {}", st.vfo);
         println!("  PTT:       {}", if st.ptt { "ON" } else { "OFF" });
         println!("  Tuning:    {}", if st.tuning { "YES" } else { "NO" });
     }
@@ -238,6 +248,28 @@ mod tests {
         assert_eq!(build_command(Command::GetVolume).unwrap(), RadioCommand::GetVolume);
         assert_eq!(build_command(Command::Agc { setting: "fast".into() }).unwrap(), RadioCommand::SetAgc(radioxide_proto::Agc::Fast));
         assert_eq!(build_command(Command::GetAgc).unwrap(), RadioCommand::GetAgc);
+        assert_eq!(build_command(Command::Vfo { vfo: "A".into() }).unwrap(), RadioCommand::SetVfo(Vfo::A));
+        assert_eq!(build_command(Command::Vfo { vfo: "B".into() }).unwrap(), RadioCommand::SetVfo(Vfo::B));
+        assert_eq!(build_command(Command::GetVfo).unwrap(), RadioCommand::GetVfo);
         assert_eq!(build_command(Command::Status).unwrap(), RadioCommand::GetStatus);
+    }
+
+    #[test]
+    fn parse_vfo() {
+        let cli = parse(&["vfo", "A"]).unwrap();
+        assert!(matches!(cli.command, Command::Vfo { ref vfo } if vfo == "A"));
+        let cli = parse(&["vfo", "b"]).unwrap();
+        assert!(matches!(cli.command, Command::Vfo { ref vfo } if vfo == "b"));
+    }
+
+    #[test]
+    fn parse_get_vfo() {
+        let cli = parse(&["get-vfo"]).unwrap();
+        assert!(matches!(cli.command, Command::GetVfo));
+    }
+
+    #[test]
+    fn build_command_vfo_invalid() {
+        assert!(build_command(Command::Vfo { vfo: "C".into() }).is_err());
     }
 }

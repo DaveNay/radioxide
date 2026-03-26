@@ -1,0 +1,41 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug daemon (dummy radio)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/radioxide-daemon",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build daemon (debug)"
+    },
+    {
+      "name": "Debug daemon (FT-450D serial)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/radioxide-daemon",
+      "args": ["--serial", "/dev/ttyUSB0"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build daemon (debug)"
+    },
+    {
+      "name": "Debug CLI",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/radioxide-cli",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "cargo build cli (debug)"
+    },
+    {
+      "name": "Debug GUI",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/radioxide-gui",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "build gui and start daemon"
+    }
+  ]
+}

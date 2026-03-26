@@ -1,8 +1,9 @@
 use async_trait::async_trait;
-use radioxide_proto::{Agc, Band, Mode, RadioStatus};
+use radioxide_proto::{Agc, Band, Mode, RadioStatus, Vfo};
 
 use super::cat::{
-    agc_to_cat, band_to_cat, cat_to_agc, cat_to_mode, freq_to_band, mode_to_cat, CatCommand,
+    agc_to_cat, band_to_cat, cat_to_agc, cat_to_mode, cat_to_vfo, freq_to_band, mode_to_cat,
+    vfo_to_cat, CatCommand,
 };
 use super::serial::{CatPort, SerialConfig};
 use crate::radio::{BackendError, Radio, Result};
@@ -138,6 +139,23 @@ impl Radio for Ft450d {
         cat_to_agc(p2)
     }
 
+    async fn set_vfo(&self, vfo: Vfo) -> Result<()> {
+        // VS command: VS{P1}; where P1=0 (VFO-A) or P1=1 (VFO-B). No response body.
+        let p1 = vfo_to_cat(vfo);
+        let cmd = CatCommand::set("VS", &p1.to_string());
+        self.port.send(&cmd).await
+    }
+
+    async fn get_vfo(&self) -> Result<Vfo> {
+        let resp = self.port.execute(&CatCommand::read("VS")).await?;
+        let p1 = resp
+            .body
+            .chars()
+            .next()
+            .ok_or_else(|| BackendError::Protocol("empty VS response".into()))?;
+        cat_to_vfo(p1)
+    }
+
     async fn get_status(&self) -> Result<RadioStatus> {
         let freq = self.get_frequency().await?;
         let mode = self.get_mode().await?;
@@ -145,6 +163,7 @@ impl Radio for Ft450d {
         let volume = self.get_volume().await?;
         let agc = self.get_agc().await?;
         let ptt = self.get_ptt().await?;
+        let vfo = self.get_vfo().await?;
         let band = freq_to_band(freq).unwrap_or(Band::Band20m);
 
         Ok(RadioStatus {
@@ -154,6 +173,7 @@ impl Radio for Ft450d {
             power,
             volume,
             agc,
+            vfo,
             ptt,
             tuning: false, // No direct CAT command to read tuning state
         })

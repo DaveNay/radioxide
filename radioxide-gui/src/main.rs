@@ -7,7 +7,7 @@ mod widgets;
 use iced::widget::{button, column, container, row, slider, text, text_input, Space};
 use iced::{Element, Font, Length, Task};
 use radioxide_proto::{
-    Agc, Band, Mode, RadioCommand, RadioStatus, RadioxideMessage, RadioxideResponse, DEFAULT_ADDR,
+    Agc, Band, Mode, RadioCommand, RadioStatus, RadioxideMessage, RadioxideResponse, Vfo, DEFAULT_ADDR,
 };
 use radioxide_transports::tcp;
 
@@ -51,6 +51,7 @@ enum Message {
     BandSelected(Band),
     ModeSelected(Mode),
     AgcSelected(Agc),
+    VfoSelected(Vfo),
     FreqInputChanged(String),
     FreqSubmit,
     PowerChanged(u8),
@@ -86,6 +87,7 @@ impl RadioxideGUI {
             Message::BandSelected(band) => Self::send(RadioCommand::SetBand(band)),
             Message::ModeSelected(mode) => Self::send(RadioCommand::SetMode(mode)),
             Message::AgcSelected(agc) => Self::send(RadioCommand::SetAgc(agc)),
+            Message::VfoSelected(vfo) => Self::send(RadioCommand::SetVfo(vfo)),
             Message::FreqInputChanged(val) => {
                 self.freq_input = val;
                 Task::none()
@@ -158,7 +160,7 @@ impl RadioxideGUI {
             row![self.view_band_panel(), self.view_mode_panel(),]
                 .spacing(8)
                 .width(Length::Fill),
-            row![self.view_agc_panel(), self.view_controls_panel(),]
+            row![self.view_vfo_panel(), self.view_agc_panel(), self.view_controls_panel(),]
                 .spacing(8)
                 .width(Length::Fill),
             self.view_sliders_panel(),
@@ -292,6 +294,19 @@ impl RadioxideGUI {
             .color(TEXT_DIM);
 
         let buttons = widgets::toggle_button_row(&ALL_AGC, self.status.agc, Message::AgcSelected, 4);
+
+        container(column![label, buttons].spacing(6).padding(10))
+            .width(Length::Fill)
+            .style(panel_style)
+            .into()
+    }
+
+    fn view_vfo_panel(&self) -> Element<'_, Message> {
+        let label = text(self.i18n.t("vfo-label"))
+            .size(11)
+            .color(TEXT_DIM);
+
+        let buttons = widgets::toggle_button_row(&ALL_VFOS, self.status.vfo, Message::VfoSelected, 2);
 
         container(column![label, buttons].spacing(6).padding(10))
             .width(Length::Fill)
@@ -435,3 +450,5 @@ const ALL_MODES: [Mode; 8] = [
 ];
 
 const ALL_AGC: [Agc; 4] = [Agc::Off, Agc::Fast, Agc::Medium, Agc::Slow];
+
+const ALL_VFOS: [Vfo; 2] = [Vfo::A, Vfo::B];

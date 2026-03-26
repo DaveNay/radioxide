@@ -10,6 +10,7 @@ freq-hz = Hz
 band-label = BAND
 mode-label = MODE
 agc-label = AGC
+vfo-label = VFO
 controls-label = CONTROLS
 power-label = POWER
 volume-label = VOL

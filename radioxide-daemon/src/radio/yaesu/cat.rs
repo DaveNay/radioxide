@@ -1,4 +1,4 @@
-use radioxide_proto::{Agc, Band, Mode};
+use radioxide_proto::{Agc, Band, Mode, Vfo};
 
 use crate::radio::BackendError;
 
@@ -158,6 +158,26 @@ pub fn cat_to_agc(c: char) -> crate::radio::Result<Agc> {
         '2' | '3' => Ok(Agc::Slow),
         '4' => Ok(Agc::Medium), // AUTO
         _ => Err(BackendError::Protocol(format!("unknown AGC char: {c}"))),
+    }
+}
+
+// --- VFO mapping ---
+
+/// Map proto::Vfo to FT-450D VS command P1 character.
+/// VS0 = VFO-A, VS1 = VFO-B.
+pub fn vfo_to_cat(vfo: Vfo) -> char {
+    match vfo {
+        Vfo::A => '0',
+        Vfo::B => '1',
+    }
+}
+
+/// Map FT-450D VS response P1 character to proto::Vfo.
+pub fn cat_to_vfo(c: char) -> crate::radio::Result<Vfo> {
+    match c {
+        '0' => Ok(Vfo::A),
+        '1' => Ok(Vfo::B),
+        _ => Err(BackendError::Protocol(format!("unknown VFO char: {c}"))),
     }
 }
 
@@ -322,5 +342,26 @@ mod tests {
         assert!(band_to_cat(Band::Band60m).is_err());
         assert!(band_to_cat(Band::Band2m).is_err());
         assert!(band_to_cat(Band::Band70cm).is_err());
+    }
+
+    #[test]
+    fn test_vfo_roundtrip() {
+        for vfo in [Vfo::A, Vfo::B] {
+            let c = vfo_to_cat(vfo);
+            let back = cat_to_vfo(c).unwrap();
+            assert_eq!(vfo, back, "roundtrip failed for {vfo:?}");
+        }
+    }
+
+    #[test]
+    fn test_vfo_to_cat() {
+        assert_eq!(vfo_to_cat(Vfo::A), '0');
+        assert_eq!(vfo_to_cat(Vfo::B), '1');
+    }
+
+    #[test]
+    fn test_cat_to_vfo_invalid() {
+        assert!(cat_to_vfo('2').is_err());
+        assert!(cat_to_vfo('X').is_err());
     }
 }

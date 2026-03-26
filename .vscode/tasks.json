@@ -1,0 +1,61 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cargo build (debug)",
+      "type": "shell",
+      "command": "cargo build --workspace",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": "$rustc",
+      "presentation": {
+        "reveal": "silent",
+        "clear": true
+      }
+    },
+    {
+      "label": "cargo build daemon (debug)",
+      "type": "shell",
+      "command": "cargo build -p radioxide-daemon",
+      "problemMatcher": "$rustc",
+      "presentation": { "reveal": "silent", "clear": true }
+    },
+    {
+      "label": "cargo build cli (debug)",
+      "type": "shell",
+      "command": "cargo build -p radioxide-cli",
+      "problemMatcher": "$rustc",
+      "presentation": { "reveal": "silent", "clear": true }
+    },
+    {
+      "label": "cargo build gui (debug)",
+      "type": "shell",
+      "command": "cargo build -p radioxide-gui",
+      "problemMatcher": "$rustc",
+      "presentation": { "reveal": "silent", "clear": true }
+    },
+    {
+      "label": "start daemon (background)",
+      "type": "shell",
+      "command": "${workspaceFolder}/target/debug/radioxide-daemon",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^",
+          "endsPattern": "Listening on"
+        }
+      },
+      "presentation": { "reveal": "silent", "panel": "dedicated" }
+    },
+    {
+      "label": "build gui and start daemon",
+      "dependsOrder": "sequence",
+      "dependsOn": ["cargo build gui (debug)", "start daemon (background)"],
+      "problemMatcher": []
+    }
+  ]
+}

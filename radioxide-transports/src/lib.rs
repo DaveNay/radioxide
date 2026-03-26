@@ -227,7 +227,7 @@ mod tests {
 #[cfg(target_os = "linux")]
 pub mod dbus {
     use super::*;
-    use radioxide_proto::{Agc, Band, Mode, RadioCommand, RadioStatus};
+    use radioxide_proto::{Agc, Band, Mode, RadioCommand, RadioStatus, Vfo};
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::Arc;
@@ -342,6 +342,19 @@ pub mod dbus {
         async fn get_agc(&self) -> fdo::Result<String> {
             let resp = (self.handler)(Self::msg(RadioCommand::GetAgc)).await;
             Self::require_status(&resp).map(|s| s.agc.to_string())
+        }
+
+        async fn set_vfo(&self, vfo: String) -> fdo::Result<bool> {
+            let vfo: Vfo = vfo
+                .parse()
+                .map_err(|e: String| fdo::Error::InvalidArgs(e))?;
+            let resp = (self.handler)(Self::msg(RadioCommand::SetVfo(vfo))).await;
+            Ok(resp.success)
+        }
+
+        async fn get_vfo(&self) -> fdo::Result<String> {
+            let resp = (self.handler)(Self::msg(RadioCommand::GetVfo)).await;
+            Self::require_status(&resp).map(|s| s.vfo.to_string())
         }
 
         async fn get_status(&self) -> fdo::Result<String> {

@@ -1,19 +1,53 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use radioxide_proto::{Agc, Band, Mode, RadioStatus};
+use radioxide_proto::{Agc, Band, Mode, RadioStatus, Vfo};
 use tokio::sync::Mutex;
 
 use super::{BackendError, Radio, Result};
 
+struct DummyState {
+    status: RadioStatus,
+    /// Independent per-VFO frequency storage.
+    freq_a: u64,
+    freq_b: u64,
+}
+
+impl DummyState {
+    fn new() -> Self {
+        let status = RadioStatus::default();
+        Self { freq_a: status.frequency_hz, freq_b: status.frequency_hz, status }
+    }
+
+    /// Return the stored frequency for the given VFO.
+    fn freq_for(&self, vfo: Vfo) -> u64 {
+        match vfo {
+            Vfo::A => self.freq_a,
+            Vfo::B => self.freq_b,
+        }
+    }
+
+    /// Store a frequency for the given VFO and keep status.frequency_hz in sync when the
+    /// target VFO is the active one.
+    fn set_freq_for(&mut self, vfo: Vfo, hz: u64) {
+        match vfo {
+            Vfo::A => self.freq_a = hz,
+            Vfo::B => self.freq_b = hz,
+        }
+        if vfo == self.status.vfo {
+            self.status.frequency_hz = hz;
+        }
+    }
+}
+
 pub struct DummyRadio {
-    state: Arc<Mutex<RadioStatus>>,
+    state: Arc<Mutex<DummyState>>,
 }
 
 impl DummyRadio {
     pub fn new() -> Self {
         Self {
-            state: Arc::new(Mutex::new(RadioStatus::default())),
+            state: Arc::new(Mutex::new(DummyState::new())),
         }
     }
 }
@@ -26,83 +60,99 @@ impl Radio for DummyRadio {
                 "frequency {hz} Hz out of range (30000-60000000)"
             )));
         }
-        self.state.lock().await.frequency_hz = hz;
+        let mut state = self.state.lock().await;
+        let active = state.status.vfo;
+        state.set_freq_for(active, hz);
         Ok(())
     }
 
     async fn get_frequency(&self) -> Result<u64> {
-        Ok(self.state.lock().await.frequency_hz)
+        let state = self.state.lock().await;
+        Ok(state.freq_for(state.status.vfo))
     }
 
     async fn set_band(&self, band: Band) -> Result<()> {
         let mut state = self.state.lock().await;
-        state.band = band;
-        state.frequency_hz = default_frequency_for_band(band);
+        state.status.band = band;
+        let active = state.status.vfo;
+        state.set_freq_for(active, default_frequency_for_band(band));
         Ok(())
     }
 
     async fn get_band(&self) -> Result<Band> {
-        Ok(self.state.lock().await.band)
+        Ok(self.state.lock().await.status.band)
     }
 
     async fn set_mode(&self, mode: Mode) -> Result<()> {
-        self.state.lock().await.mode = mode;
+        self.state.lock().await.status.mode = mode;
         Ok(())
     }
 
     async fn get_mode(&self) -> Result<Mode> {
-        Ok(self.state.lock().await.mode)
+        Ok(self.state.lock().await.status.mode)
     }
 
     async fn tune(&self) -> Result<()> {
-        self.state.lock().await.tuning = true;
+        self.state.lock().await.status.tuning = true;
         // Simulate tuner completing after 2 seconds.
         let state = self.state.clone();
         tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            state.lock().await.tuning = false;
+            state.lock().await.status.tuning = false;
         });
         Ok(())
     }
 
     async fn set_ptt(&self, on: bool) -> Result<()> {
-        self.state.lock().await.ptt = on;
+        self.state.lock().await.status.ptt = on;
         Ok(())
     }
 
     async fn get_ptt(&self) -> Result<bool> {
-        Ok(self.state.lock().await.ptt)
+        Ok(self.state.lock().await.status.ptt)
     }
 
     async fn set_power(&self, percent: u8) -> Result<()> {
-        self.state.lock().await.power = percent.min(100);
+        self.state.lock().await.status.power = percent.min(100);
         Ok(())
     }
 
     async fn get_power(&self) -> Result<u8> {
-        Ok(self.state.lock().await.power)
+        Ok(self.state.lock().await.status.power)
     }
 
     async fn set_volume(&self, percent: u8) -> Result<()> {
-        self.state.lock().await.volume = percent.min(100);
+        self.state.lock().await.status.volume = percent.min(100);
         Ok(())
     }
 
     async fn get_volume(&self) -> Result<u8> {
-        Ok(self.state.lock().await.volume)
+        Ok(self.state.lock().await.status.volume)
     }
 
     async fn set_agc(&self, agc: Agc) -> Result<()> {
-        self.state.lock().await.agc = agc;
+        self.state.lock().await.status.agc = agc;
         Ok(())
     }
 
     async fn get_agc(&self) -> Result<Agc> {
-        Ok(self.state.lock().await.agc)
+        Ok(self.state.lock().await.status.agc)
+    }
+
+    async fn set_vfo(&self, vfo: Vfo) -> Result<()> {
+        let mut state = self.state.lock().await;
+        state.status.vfo = vfo;
+        // Update frequency_hz so status always reflects the active VFO's frequency.
+        state.status.frequency_hz = state.freq_for(vfo);
+        Ok(())
+    }
+
+    async fn get_vfo(&self) -> Result<Vfo> {
+        Ok(self.state.lock().await.status.vfo)
     }
 
     async fn get_status(&self) -> Result<RadioStatus> {
-        Ok(self.state.lock().await.clone())
+        Ok(self.state.lock().await.status.clone())
     }
 }
 
@@ -233,5 +283,61 @@ mod tests {
         radio.tune().await.unwrap();
         let status = radio.get_status().await.unwrap();
         assert!(status.tuning);
+    }
+
+    #[tokio::test]
+    async fn test_vfo_roundtrip() {
+        let radio = DummyRadio::new();
+        assert_eq!(radio.get_vfo().await.unwrap(), Vfo::A);
+        radio.set_vfo(Vfo::B).await.unwrap();
+        assert_eq!(radio.get_vfo().await.unwrap(), Vfo::B);
+        radio.set_vfo(Vfo::A).await.unwrap();
+        assert_eq!(radio.get_vfo().await.unwrap(), Vfo::A);
+    }
+
+    #[tokio::test]
+    async fn test_vfo_in_status() {
+        let radio = DummyRadio::new();
+        radio.set_vfo(Vfo::B).await.unwrap();
+        assert_eq!(radio.get_status().await.unwrap().vfo, Vfo::B);
+    }
+
+    #[tokio::test]
+    async fn test_vfos_store_independent_frequencies() {
+        let radio = DummyRadio::new();
+
+        // Set VFO-A frequency.
+        radio.set_vfo(Vfo::A).await.unwrap();
+        radio.set_frequency(14_074_000).await.unwrap();
+
+        // Switch to VFO-B and set a different frequency.
+        radio.set_vfo(Vfo::B).await.unwrap();
+        radio.set_frequency(7_074_000).await.unwrap();
+        assert_eq!(radio.get_frequency().await.unwrap(), 7_074_000);
+
+        // Switching back to VFO-A should restore its frequency.
+        radio.set_vfo(Vfo::A).await.unwrap();
+        assert_eq!(radio.get_frequency().await.unwrap(), 14_074_000);
+
+        // Status frequency_hz reflects the active VFO.
+        let status = radio.get_status().await.unwrap();
+        assert_eq!(status.frequency_hz, 14_074_000);
+        assert_eq!(status.vfo, Vfo::A);
+    }
+
+    #[tokio::test]
+    async fn test_set_band_only_affects_active_vfo() {
+        let radio = DummyRadio::new();
+
+        // Set VFO-A to 40m.
+        radio.set_vfo(Vfo::A).await.unwrap();
+        radio.set_band(Band::Band40m).await.unwrap();
+        let freq_a = radio.get_frequency().await.unwrap();
+        assert_eq!(freq_a, 7_074_000);
+
+        // Switch to VFO-B — its frequency is unchanged.
+        radio.set_vfo(Vfo::B).await.unwrap();
+        let freq_b = radio.get_frequency().await.unwrap();
+        assert_ne!(freq_b, freq_a);
     }
 }

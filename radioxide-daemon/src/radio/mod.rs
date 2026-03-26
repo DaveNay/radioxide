@@ -2,7 +2,7 @@ pub mod dummy;
 pub mod yaesu;
 
 use async_trait::async_trait;
-use radioxide_proto::{Agc, Band, Mode, RadioStatus};
+use radioxide_proto::{Agc, Band, Mode, RadioStatus, Vfo};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -45,5 +45,7 @@ pub trait Radio: Send + Sync {
     async fn get_volume(&self) -> Result<u8>;
     async fn set_agc(&self, agc: Agc) -> Result<()>;
     async fn get_agc(&self) -> Result<Agc>;
+    async fn set_vfo(&self, vfo: Vfo) -> Result<()>;
+    async fn get_vfo(&self) -> Result<Vfo>;
     async fn get_status(&self) -> Result<RadioStatus>;
 }
