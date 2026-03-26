@@ -5,7 +5,7 @@ edition = "2024"
 license.workspace = true
 
 [dependencies]
-iced = { version = "0.13.0", features = ["canvas"] }
+iced = { version = "0.13.0", features = ["canvas", "svg"] }
 tokio = { version = "1", features = ["full"] }
 radioxide-proto = { path = "../radioxide-proto" }
 radioxide-transports = { path = "../radioxide-transports" }
