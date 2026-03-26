@@ -12,8 +12,8 @@ struct DummyState {
     /// Independent per-VFO frequency storage.
     freq_a: u64,
     freq_b: u64,
-    /// Last-used frequency per band, restored when switching back to a band.
-    band_freq: HashMap<Band, u64>,
+    /// Last-used frequency per (VFO, band), restored when switching back.
+    band_freq: HashMap<(Vfo, Band), u64>,
 }
 
 impl DummyState {
@@ -47,15 +47,16 @@ impl DummyState {
         }
     }
 
-    /// Remember hz as the last-used frequency for the current band.
+    /// Remember hz as the last-used frequency for the current VFO and band.
     fn remember_band_freq(&mut self, hz: u64) {
-        self.band_freq.insert(self.status.band, hz);
+        self.band_freq
+            .insert((self.status.vfo, self.status.band), hz);
     }
 
-    /// Return the remembered frequency for a band, or its default on first visit.
-    fn recalled_freq_for_band(&self, band: Band) -> u64 {
+    /// Return the remembered frequency for a VFO+band pair, or the band default on first visit.
+    fn recalled_freq_for_band(&self, vfo: Vfo, band: Band) -> u64 {
         self.band_freq
-            .get(&band)
+            .get(&(vfo, band))
             .copied()
             .unwrap_or_else(|| default_frequency_for_band(band))
     }
@@ -96,8 +97,8 @@ impl Radio for DummyRadio {
     async fn set_band(&self, band: Band) -> Result<()> {
         let mut state = self.state.lock().await;
         state.status.band = band;
-        let freq = state.recalled_freq_for_band(band);
         let active = state.status.vfo;
+        let freq = state.recalled_freq_for_band(active, band);
         state.set_freq_for(active, freq);
         Ok(())
     }
@@ -313,24 +314,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_band_remembers_frequency() {
+    async fn test_band_remembers_frequency_per_vfo() {
         let radio = DummyRadio::new();
 
-        // Tune 40m to a non-default frequency.
+        // VFO-A: tune 40m to 7.200 MHz, then 20m to 14.225 MHz.
+        radio.set_vfo(Vfo::A).await.unwrap();
         radio.set_band(Band::Band40m).await.unwrap();
         radio.set_frequency(7_200_000).await.unwrap();
-
-        // Switch to 20m and tune there.
         radio.set_band(Band::Band20m).await.unwrap();
         radio.set_frequency(14_225_000).await.unwrap();
 
-        // Return to 40m — should recall 7.200 MHz, not the 40m default.
+        // VFO-B: tune 40m to 7.074 MHz (default), 20m to 14.300 MHz.
+        radio.set_vfo(Vfo::B).await.unwrap();
+        radio.set_band(Band::Band40m).await.unwrap();
+        radio.set_frequency(7_074_000).await.unwrap();
+        radio.set_band(Band::Band20m).await.unwrap();
+        radio.set_frequency(14_300_000).await.unwrap();
+
+        // VFO-A returning to 40m should get its own 7.200 MHz, not VFO-B's 7.074.
+        radio.set_vfo(Vfo::A).await.unwrap();
         radio.set_band(Band::Band40m).await.unwrap();
         assert_eq!(radio.get_frequency().await.unwrap(), 7_200_000);
 
-        // Return to 20m — should recall 14.225 MHz.
+        // VFO-B returning to 20m should get its own 14.300 MHz, not VFO-A's 14.225.
+        radio.set_vfo(Vfo::B).await.unwrap();
         radio.set_band(Band::Band20m).await.unwrap();
-        assert_eq!(radio.get_frequency().await.unwrap(), 14_225_000);
+        assert_eq!(radio.get_frequency().await.unwrap(), 14_300_000);
     }
 
     #[tokio::test]

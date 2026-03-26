@@ -166,7 +166,7 @@ impl std::str::FromStr for Agc {
 }
 
 /// VFO (Variable Frequency Oscillator) selector.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Vfo {
     A,
     B,
