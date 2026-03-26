@@ -7,3 +7,6 @@ members = [
     "radioxide-proto",
     "radioxide-transports"
 ]
+
+[workspace.package]
+license = "MIT OR Apache-2.0"

@@ -2,6 +2,7 @@
 name = "radioxide-gui"
 version = "0.1.0"
 edition = "2024"
+license.workspace = true
 
 [dependencies]
 iced = { version = "0.13.0", features = ["canvas"] }
