@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -11,6 +12,8 @@ struct DummyState {
     /// Independent per-VFO frequency storage.
     freq_a: u64,
     freq_b: u64,
+    /// Last-used frequency per band, restored when switching back to a band.
+    band_freq: HashMap<Band, u64>,
 }
 
 impl DummyState {
@@ -19,6 +22,7 @@ impl DummyState {
         Self {
             freq_a: status.frequency_hz,
             freq_b: status.frequency_hz,
+            band_freq: HashMap::new(),
             status,
         }
     }
@@ -41,6 +45,19 @@ impl DummyState {
         if vfo == self.status.vfo {
             self.status.frequency_hz = hz;
         }
+    }
+
+    /// Remember hz as the last-used frequency for the current band.
+    fn remember_band_freq(&mut self, hz: u64) {
+        self.band_freq.insert(self.status.band, hz);
+    }
+
+    /// Return the remembered frequency for a band, or its default on first visit.
+    fn recalled_freq_for_band(&self, band: Band) -> u64 {
+        self.band_freq
+            .get(&band)
+            .copied()
+            .unwrap_or_else(|| default_frequency_for_band(band))
     }
 }
 
@@ -67,6 +84,7 @@ impl Radio for DummyRadio {
         let mut state = self.state.lock().await;
         let active = state.status.vfo;
         state.set_freq_for(active, hz);
+        state.remember_band_freq(hz);
         Ok(())
     }
 
@@ -78,8 +96,9 @@ impl Radio for DummyRadio {
     async fn set_band(&self, band: Band) -> Result<()> {
         let mut state = self.state.lock().await;
         state.status.band = band;
+        let freq = state.recalled_freq_for_band(band);
         let active = state.status.vfo;
-        state.set_freq_for(active, default_frequency_for_band(band));
+        state.set_freq_for(active, freq);
         Ok(())
     }
 
@@ -291,6 +310,35 @@ mod tests {
         radio.tune().await.unwrap();
         let status = radio.get_status().await.unwrap();
         assert!(status.tuning);
+    }
+
+    #[tokio::test]
+    async fn test_band_remembers_frequency() {
+        let radio = DummyRadio::new();
+
+        // Tune 40m to a non-default frequency.
+        radio.set_band(Band::Band40m).await.unwrap();
+        radio.set_frequency(7_200_000).await.unwrap();
+
+        // Switch to 20m and tune there.
+        radio.set_band(Band::Band20m).await.unwrap();
+        radio.set_frequency(14_225_000).await.unwrap();
+
+        // Return to 40m — should recall 7.200 MHz, not the 40m default.
+        radio.set_band(Band::Band40m).await.unwrap();
+        assert_eq!(radio.get_frequency().await.unwrap(), 7_200_000);
+
+        // Return to 20m — should recall 14.225 MHz.
+        radio.set_band(Band::Band20m).await.unwrap();
+        assert_eq!(radio.get_frequency().await.unwrap(), 14_225_000);
+    }
+
+    #[tokio::test]
+    async fn test_band_first_visit_uses_default() {
+        let radio = DummyRadio::new();
+        // First visit to 17m should give the default frequency.
+        radio.set_band(Band::Band17m).await.unwrap();
+        assert_eq!(radio.get_frequency().await.unwrap(), 18_100_000);
     }
 
     #[tokio::test]

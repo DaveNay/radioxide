@@ -4,7 +4,7 @@ pub const DEFAULT_PORT: u16 = 7600;
 pub const DEFAULT_ADDR: &str = "127.0.0.1:7600";
 
 /// Amateur radio frequency band.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Band {
     /// 160 meters (1.8–2.0 MHz)
     Band160m,
