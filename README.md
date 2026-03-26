@@ -7,6 +7,10 @@ A cross-platform ham radio remote control application written in Rust. Radioxide
 ![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue)
 ![CI](https://github.com/DaveNay/radioxide/actions/workflows/ci.yml/badge.svg)
 
+<p align="center">
+  <img src="assets/logo.svg" alt="Radioxide logo" width="160"/>
+</p>
+
 ## Features
 
 - **Direct hardware control** — Talks CAT protocol over serial, no hamlib dependency
