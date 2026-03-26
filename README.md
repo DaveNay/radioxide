@@ -42,7 +42,7 @@ All communication between clients and the daemon uses JSON-serialized messages o
 
 ## Building
 
-Requires Rust 1.75+ and Cargo.
+Requires Rust 1.85+ and Cargo.
 
 ```bash
 # Build the entire workspace
@@ -89,7 +89,7 @@ cargo run -p radioxide-gui
 The GUI provides:
 - Large frequency display with comma-separated readout
 - Rotary tuning knob with speed-proportional frequency steps (grab and rotate with the mouse)
-- Toggle buttons for band, mode, and AGC
+- Toggle buttons for band, mode, AGC, and VFO (A/B)
 - Power and volume sliders
 - PTT and tune controls
 - Connection status indicator
@@ -108,6 +108,8 @@ cargo run -p radioxide-cli -- volume 30
 cargo run -p radioxide-cli -- tune
 cargo run -p radioxide-cli -- ptt on
 cargo run -p radioxide-cli -- ptt off
+cargo run -p radioxide-cli -- vfo A
+cargo run -p radioxide-cli -- vfo B
 ```
 
 ### 4. D-Bus (Linux only)
@@ -157,7 +159,7 @@ An NSIS installer script is included (`packaging/installer.nsi`). Build release 
 ```
 radioxide/
   Cargo.toml                        Workspace root
-  radioxide-proto/                  Shared types: RadioCommand, RadioStatus, Band, Mode, Agc
+  radioxide-proto/                  Shared types: RadioCommand, RadioStatus, Band, Mode, Agc, Vfo
   radioxide-transports/             TCP client/server + D-Bus interface (Linux)
   radioxide-daemon/
     src/
