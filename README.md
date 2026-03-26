@@ -5,7 +5,7 @@ A cross-platform ham radio remote control application written in Rust. Radioxide
 ![Rust](https://img.shields.io/badge/Rust-1.85+-orange)
 ![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-blue)
 ![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue)
-![CI](https://github.com/your-username/radioxide/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/DaveNay/radioxide/actions/workflows/ci.yml/badge.svg)
 
 ## Features
 
@@ -199,6 +199,10 @@ Contributions are welcome. The codebase uses standard Rust tooling:
 - `cargo fmt` for formatting
 - `cargo clippy` for linting
 - `cargo test --workspace` to run all tests
+
+## Disclaimer
+
+This project was developed with [Claude Code](https://claude.ai/code), Anthropic's AI coding assistant.
 
 ## Acknowledgments
 
