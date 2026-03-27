@@ -8,7 +8,7 @@ A cross-platform ham radio remote control application written in Rust. Radioxide
 ![CI](https://github.com/DaveNay/radioxide/actions/workflows/ci.yml/badge.svg)
 
 <p align="center">
-  <img src="assets/logo.svg" alt="Radioxide logo" width="160"/>
+  <img src="assets/logo.png" alt="Radioxide logo" width="160"/>
 </p>
 
 ## Features

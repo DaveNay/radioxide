@@ -4,7 +4,7 @@ mod styles;
 mod theme;
 mod widgets;
 
-use iced::widget::{Space, button, column, container, row, slider, svg, text, text_input};
+use iced::widget::{Space, button, column, container, image, row, slider, text, text_input};
 use iced::{Element, Font, Length, Task};
 use radioxide_proto::{
     Agc, Band, DEFAULT_ADDR, Mode, RadioCommand, RadioStatus, RadioxideMessage, RadioxideResponse,
@@ -186,8 +186,8 @@ impl RadioxideGUI {
         let led = text("●").size(14).color(led_color);
 
         let logo_handle =
-            svg::Handle::from_memory(include_bytes!("../../assets/logo.svg").as_slice());
-        let logo = svg(logo_handle).height(Length::Fixed(44.0));
+            image::Handle::from_bytes(include_bytes!("../../assets/logo.png").as_slice());
+        let logo = image(logo_handle).height(Length::Fixed(44.0));
 
         let refresh_btn = button(text(self.i18n.t("refresh")).size(12))
             .on_press(Message::RefreshStatus)
